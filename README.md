@@ -4,7 +4,7 @@
 
 Sky Testament 是一个**天文记录生成器**。输入一个真实的时刻与地点，它还原那一刻真实可见的天空，并写下一段克制的文字作为注脚。它不预测命运，只记录天空。
 
-**状态**：设计阶段，代码尚未开始。
+**状态**：MVP 开发中 · M1（天文核心）已完成
 
 ---
 
@@ -82,6 +82,8 @@ Browser (SPA，无后端)
 | 月相照度 | < 0.5% | 对照 USNO |
 | 日出日落 | < 1 分钟 | 对照 Horizons |
 
+实测（2026-10-19 12:00 UTC，上海，对照 JPL Horizons）：火星 0.03′、木星 0.04′、月亮 0.04′、金星 0.33′，均远优于目标。
+
 已知边界（会写进 README 与 PDF 页脚）：
 
 - 1970 年之前的时区规则为回推数据，精度有限，提供手动 UTC 覆盖
@@ -119,11 +121,22 @@ MVP 验收：陌生人在 30 秒内生成一张自己愿意发出去的图；A3 
 
 ## 开发
 
-> 代码尚未开始，以下是既定环境约束。
+环境：Node **20.18+** 与 npm。不使用 pnpm——Windows 默认没有创建符号链接的权限。
 
-- Node **20.18+**（Vite 6，非 7）
-- npm（不使用 pnpm：Windows 符号链接权限受限）
-- Chrome / Edge 用于本地打印与截图验证
+```bash
+npm install
+npm run dev      # 开发服务器，http://localhost:5173
+npm test         # 单元测试（含 JPL Horizons 对照）
+npm run ephem    # 命令行打印天体高度与方位
+npm run build    # 类型检查 + 生产构建
+npm run shot     # Playwright 截图（channel: chrome，不下载内核）
+```
+
+已完成（M1）：
+
+- `src/core/time.ts` —— 本地时间 → UTC，覆盖夏令时前拨与回拨
+- `src/core/ephemeris.ts` —— 太阳、月亮、五大行星的赤道与地平坐标
+- 18 个单元测试；4 个天体对照 Horizons，最大偏差 0.33′
 
 ## 参与
 

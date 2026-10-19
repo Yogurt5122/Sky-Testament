@@ -1,0 +1,36 @@
+{
+  "name": "sky-testament",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "输入一个时刻和地点，生成那张天空的星图，以及一段墓志铭",
+  "engines": {
+    "node": ">=20.18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "ephem": "vite-node scripts/ephem.ts",
+    "shot": "node scripts/shot.mjs"
+  },
+  "dependencies": {
+    "astronomy-engine": "^2.1.19",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.49.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.3.5",
+    "vite-node": "^3.2.4",
+    "vitest": "^3.2.4"
+  }
+}
