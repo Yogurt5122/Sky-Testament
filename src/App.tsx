@@ -5,7 +5,7 @@ import { parseStarCatalog, type Star } from './core/starcatalog';
 import { formatOffset, isValidTimeZone, resolveLocalTime } from './core/time';
 import { Chart } from './render/Chart';
 import { ChartModal } from './render/ChartModal';
-import { buildChartScene } from './render/scene';
+import { buildChartScene, type DetailLevel } from './render/scene';
 import starNamesZh from './data/star-names-zh.json';
 
 const NAME_ZH = starNamesZh as Record<string, string>;
@@ -50,6 +50,16 @@ interface Result {
   ambiguous: boolean;
 }
 
+type Theme = 'night' | 'paper';
+
+const SKY_QUALITY = [
+  { id: 'dark', label: '暗夜', limit: 6.5, hint: '极限 6.5 等' },
+  { id: 'suburb', label: '郊外', limit: 5.5, hint: '极限 5.5 等' },
+  { id: 'city', label: '城市', limit: 4.0, hint: '极限 4.0 等' },
+] as const;
+
+type QualityId = (typeof SKY_QUALITY)[number]['id'];
+
 const MINUS = '\u2212';
 
 function formatSigned(value: number, digits = 2): string {
@@ -76,6 +86,16 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [chartOpen, setChartOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
+  const [theme, setTheme] = useState<Theme>('night');
+  const [quality, setQuality] = useState<QualityId>('suburb');
+  const [detail, setDetail] = useState<DetailLevel>('standard');
+
+  const qualityOption = SKY_QUALITY.find((option) => option.id === quality) ?? SKY_QUALITY[1];
+
+  useEffect(() => {
+    document.body.classList.toggle('theme-night', theme === 'night');
+    return () => document.body.classList.remove('theme-night');
+  }, [theme]);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,8 +147,11 @@ export default function App() {
 
   const scene = useMemo(() => {
     if (!result || stars.length === 0) return null;
-    return buildChartScene(result.snapshot, stars, starNames);
-  }, [result, stars, starNames]);
+    return buildChartScene(result.snapshot, stars, starNames, {
+      limitingMagnitude: qualityOption.limit,
+      detail,
+    });
+  }, [result, stars, starNames, qualityOption.limit, detail]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -173,6 +196,9 @@ export default function App() {
         skipped: local.skipped,
         ambiguous: local.ambiguous,
       });
+
+      // 白昼用纸面、夜间用夜空，避免浅色圆盘压在深色页面上
+      setTheme(snapshot.daylight ? 'paper' : 'night');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -185,7 +211,7 @@ export default function App() {
   return (
     <main className="page">
       <header className="masthead">
-        <p className="kicker">M3 · 星图</p>
+        <p className="kicker">M4 · 夜空</p>
         <h1>天穹遗嘱</h1>
         <p className="lede">
           输入一个时刻与地点，还原那一刻真实可见的天空。球极投影，天顶居中，地平线为外圈。
@@ -280,6 +306,76 @@ export default function App() {
             />
           </label>
         </div>
+
+        <div className="options">
+          <div className="option-group">
+            <span className="option-label">画面</span>
+            <div className="segmented">
+              <button
+                type="button"
+                className={theme === 'night' ? 'is-active' : ''}
+                onClick={() => setTheme('night')}
+              >
+                夜空
+              </button>
+              <button
+                type="button"
+                className={theme === 'paper' ? 'is-active' : ''}
+                onClick={() => setTheme('paper')}
+              >
+                纸
+              </button>
+            </div>
+          </div>
+
+          <div className="option-group">
+            <span className="option-label">天空质量</span>
+            <div className="segmented">
+              {SKY_QUALITY.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={quality === option.id ? 'is-active' : ''}
+                  onClick={() => setQuality(option.id)}
+                  title={option.hint}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="option-group">
+            <span className="option-label">图例</span>
+            <div className="segmented">
+              <button
+                type="button"
+                className={detail === 'minimal' ? 'is-active' : ''}
+                onClick={() => setDetail('minimal')}
+                title="只画星星，不要任何标注"
+              >
+                纯净
+              </button>
+              <button
+                type="button"
+                className={detail === 'standard' ? 'is-active' : ''}
+                onClick={() => setDetail('standard')}
+                title="主要星座连线、行星与亮星名"
+              >
+                标准
+              </button>
+              <button
+                type="button"
+                className={detail === 'atlas' ? 'is-active' : ''}
+                onClick={() => setDetail('atlas')}
+                title="叠加黄道、天赤道、高度环标注与更多数据"
+              >
+                图谱
+              </button>
+            </div>
+          </div>
+        </div>
+
         <button type="submit">计算这一刻的天空</button>
       </form>
 
@@ -293,7 +389,7 @@ export default function App() {
                 <Chart scene={scene} />
                 <figcaption>
                   {scene.daylight ? '白昼的天空 · ' : ''}
-                  可见恒星 {scene.starCount} 颗 · 球极投影 · 天顶居中
+                  可见恒星 {scene.starCount} 颗 · 极限 {scene.limitingMagnitude} 等 · 球极投影
                 </figcaption>
               </figure>
               <div className="chart-actions">

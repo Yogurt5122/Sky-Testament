@@ -35,11 +35,52 @@ describe('buildChartScene', () => {
     }
   });
 
-  it('地平线以上的行星都会出现', () => {
+  it('地平线以上的行星都会出现，月亮单独成盘', () => {
     const visible = night.bodies.filter(
-      (body) => body.altitude > 0.5 && !(body.id === 'sun' && !night.daylight),
+      (body) =>
+        body.altitude > 0.5 &&
+        !(body.id === 'sun' && !night.daylight) &&
+        body.id !== 'moon',
     );
     expect(scene.planets.length).toBe(visible.length);
+    expect(scene.moon).not.toBeNull();
+    expect(scene.moon!.illumination).toBeGreaterThan(0);
+    expect(scene.moon!.waxing).toBe(true);
+  });
+
+  it('极限星等会减少星数', () => {
+    const city = buildChartScene(night, stars, names, { limitingMagnitude: 4.0 });
+    expect(city.starCount).toBeLessThan(scene.starCount);
+    expect(city.limitingMagnitude).toBe(4.0);
+  });
+
+  it('恒星按颜色分箱落在 0–3', () => {
+    for (const bucket of scene.buckets) {
+      expect(bucket.colorBin).toBeGreaterThanOrEqual(0);
+      expect(bucket.colorBin).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('纯净档不画标注、星座与参考线', () => {
+    const minimal = buildChartScene(night, stars, names, { detail: 'minimal' });
+    expect(minimal.detail).toBe('minimal');
+    expect(minimal.labels).toHaveLength(0);
+    expect(minimal.constellations).toHaveLength(0);
+    expect(minimal.ecliptic).toBe('');
+    expect(minimal.equator).toBe('');
+    // 星星本身不受影响
+    expect(minimal.starCount).toBe(scene.starCount);
+  });
+
+  it('图谱档叠加黄道、天赤道与更多标注', () => {
+    const atlas = buildChartScene(night, stars, names, { detail: 'atlas' });
+    expect(atlas.detail).toBe('atlas');
+    expect(atlas.ecliptic.length).toBeGreaterThan(100);
+    expect(atlas.equator.length).toBeGreaterThan(100);
+    expect(atlas.labels.some((label) => label.text === '黄道')).toBe(true);
+    expect(atlas.labels.some((label) => label.text === '天赤道')).toBe(true);
+    expect(atlas.labels.length).toBeGreaterThan(scene.labels.length);
+    expect(atlas.labels.some((label) => label.text.includes('等'))).toBe(true);
   });
 
   it('标签互不重叠且都在画布内', () => {

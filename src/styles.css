@@ -20,9 +20,20 @@
   --ink-soft: #5a564e;
   --rule: #d8d2c4;
   --accent: #8c5a3c;
+  --overlay: rgba(244, 240, 232, 0.92);
   --mono: 'IBM Plex Mono', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
   --serif: 'Sky Serif', 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
   color-scheme: light;
+}
+
+body.theme-night {
+  --paper: #0b0d12;
+  --ink: #e9e3d5;
+  --ink-soft: #928c81;
+  --rule: #262a33;
+  --accent: #c9915f;
+  --overlay: rgba(22, 25, 33, 0.92);
+  color-scheme: dark;
 }
 
 * {
@@ -42,6 +53,28 @@ body {
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 320ms ease, color 320ms ease;
+}
+
+body.theme-night .panel {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+body.theme-night input {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+body.theme-night .city-results {
+  background: #12151b;
+}
+
+body.theme-night .error {
+  background: rgba(170, 80, 70, 0.12);
+  color: #e0a49c;
+}
+
+body.theme-night .notice {
+  background: rgba(201, 145, 95, 0.12);
 }
 
 .page {
@@ -83,6 +116,53 @@ h1 {
   border: 1px solid var(--rule);
   padding: 24px;
   background: rgba(255, 255, 255, 0.35);
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 32px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px dashed var(--rule);
+}
+
+.option-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.option-label {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+}
+
+.segmented button {
+  width: auto;
+  margin: 0;
+  padding: 6px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--ink-soft);
+  font-family: var(--serif);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--rule);
+}
+
+.segmented button.is-active {
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .city-search {
@@ -322,11 +402,6 @@ tr.below td {
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-top: 56px;
-  box-sizing: border-box;
   background: var(--paper);
 }
 
@@ -339,7 +414,8 @@ tr.below td {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 16px 22px;
+  padding: 14px 22px;
+  background: var(--paper);
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.1em;
@@ -362,7 +438,7 @@ tr.below td {
   width: 36px;
   height: 36px;
   padding: 0;
-  background: rgba(244, 240, 232, 0.92);
+  background: var(--overlay);
   border: 1px solid rgba(26, 26, 24, 0.3);
   color: var(--ink);
   font-size: 20px;
@@ -373,13 +449,12 @@ tr.below td {
 .chart-modal-close:hover,
 .chart-modal-controls button:hover {
   border-color: var(--ink);
-  background: rgba(26, 26, 24, 0.06);
+  filter: brightness(1.12);
 }
 
 .chart-modal-stage {
-  position: relative;
-  width: min(100vw, calc(100vh - 56px));
-  height: min(100vw, calc(100vh - 56px));
+  position: absolute;
+  inset: 0;
   overflow: hidden;
   background: var(--paper);
   touch-action: none;
@@ -410,7 +485,7 @@ tr.below td {
   min-width: 42px;
   height: 38px;
   padding: 0 12px;
-  background: rgba(244, 240, 232, 0.92);
+  background: var(--overlay);
   border: 1px solid rgba(26, 26, 24, 0.3);
   color: var(--ink);
   font-family: var(--mono);
@@ -465,11 +540,93 @@ tr.below td {
   fill: var(--ink);
 }
 
+/* 鎭掓槦棰滆壊锛氱敱 B鈭扸 鍒嗙锛岀焊闈㈢敤鍘嬫殫鐨勮壊鐩革紝澶滅┖鐢ㄧ湡瀹炶壊鐩?*/
+.chart-stars .star-bin-0 {
+  fill: #414c72;
+}
+
+.chart-stars .star-bin-1 {
+  fill: #3a3a36;
+}
+
+.chart-stars .star-bin-2 {
+  fill: #5d4c39;
+}
+
+.chart-stars .star-bin-3 {
+  fill: #703f29;
+}
+
+body.theme-night .chart-stars .star-bin-0 {
+  fill: #c3cfec;
+}
+
+body.theme-night .chart-stars .star-bin-1 {
+  fill: #efece2;
+}
+
+body.theme-night .chart-stars .star-bin-2 {
+  fill: #f3e4cb;
+}
+
+body.theme-night .chart-stars .star-bin-3 {
+  fill: #e2c0a4;
+}
+
+.chart-moon-dark {
+  fill: #e2dccd;
+  stroke: var(--ink-soft);
+  stroke-width: 0.5;
+}
+
+.chart-moon-lit {
+  fill: var(--ink);
+}
+
+body.theme-night .chart-moon-dark {
+  fill: #23262e;
+}
+
+body.theme-night .chart-moon-lit {
+  fill: #f7f0dd;
+}
+
 .chart-constellations path {
   fill: none;
   stroke: var(--ink-soft);
   stroke-width: 0.85;
   opacity: 0.62;
+}
+
+.chart-guide {
+  fill: none;
+}
+
+.chart-guide--equator {
+  stroke: var(--ink-soft);
+  stroke-dasharray: 1 6;
+  opacity: 0.5;
+}
+
+.chart-guide--ecliptic {
+  stroke: var(--accent);
+  stroke-dasharray: 7 5;
+  opacity: 0.55;
+}
+
+.chart-label--guide {
+  fill: var(--ink-soft);
+  letter-spacing: 0.24em;
+  opacity: 0.85;
+}
+
+.chart-ring-label {
+  font-family: var(--mono);
+  fill: var(--ink-soft);
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-linejoin: round;
+  opacity: 0.8;
 }
 
 .chart--day .chart-constellations path {
@@ -517,7 +674,7 @@ tr.below td {
 }
 
 .chart--day .chart-stars path {
-  fill: #cfc8b8;
+  opacity: 0.35;
 }
 
 .chart--day .chart-label {

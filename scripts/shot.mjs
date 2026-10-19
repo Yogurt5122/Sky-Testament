@@ -30,6 +30,8 @@ await page.getByPlaceholder('上海 / Tokyo / New York').fill('成都');
 await page.getByRole('button', { name: /成都/ }).first().click();
 await page.getByRole('button', { name: '计算这一刻的天空' }).click();
 await page.waitForSelector('table');
+// 等主题切换的 320ms 过渡结束
+await page.waitForTimeout(700);
 if (process.env.SHOT_MODAL) {
   await page.locator('.chart-trigger').click();
   await page.waitForSelector('.chart-modal');

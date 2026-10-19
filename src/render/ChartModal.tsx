@@ -5,7 +5,8 @@ import type { ChartScene } from './scene';
 const SCENE_SIZE = 1000;
 /** 最小视图宽度 ≈ 14 倍放大 */
 const MIN_WIDTH = 70;
-const MAX_WIDTH = SCENE_SIZE;
+/** 最大视图宽度：允许缩小到看清整个星盘 */
+const MAX_WIDTH = 1600;
 
 interface View {
   x: number;
@@ -15,11 +16,14 @@ interface View {
 
 function clampView(view: View): View {
   const width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, view.width));
-  const limit = SCENE_SIZE - width;
+  // 视图比场景大时（缩得很远），允许它居中超出场景
+  const overflow = Math.max(0, width - SCENE_SIZE);
+  const min = -overflow / 2;
+  const max = SCENE_SIZE - width + overflow / 2;
   return {
     width,
-    x: Math.min(limit, Math.max(0, view.x)),
-    y: Math.min(limit, Math.max(0, view.y)),
+    x: Math.min(max, Math.max(min, view.x)),
+    y: Math.min(max, Math.max(min, view.y)),
   };
 }
 
@@ -63,17 +67,23 @@ export function ChartModal({ scene, onClose }: ChartModalProps) {
 
       const pointX = clientX ?? rect.left + rect.width / 2;
       const pointY = clientY ?? rect.top + rect.height / 2;
-      const offsetX = pointX - rect.left;
-      const offsetY = pointY - rect.top;
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
 
-      // 光标处的场景坐标，缩放后保持不动
-      const anchorX = current.x + (offsetX / rect.width) * current.width;
-      const anchorY = current.y + (offsetY / rect.height) * current.width;
+      // slice：内容按长边铺满，等比缩放
+      const scale = Math.max(rect.width, rect.height) / current.width;
+      const currentCenterX = current.x + current.width / 2;
+      const currentCenterY = current.y + current.width / 2;
+
+      // 光标下的场景坐标，缩放后保持不动
+      const anchorX = currentCenterX + (pointX - centerX) / scale;
+      const anchorY = currentCenterY + (pointY - centerY) / scale;
+      const nextScale = Math.max(rect.width, rect.height) / nextWidth;
 
       apply({
         width: nextWidth,
-        x: anchorX - (offsetX / rect.width) * nextWidth,
-        y: anchorY - (offsetY / rect.height) * nextWidth,
+        x: anchorX - nextWidth / 2 - (pointX - centerX) / nextScale,
+        y: anchorY - nextWidth / 2 - (pointY - centerY) / nextScale,
       });
     },
     [apply],
@@ -148,7 +158,7 @@ export function ChartModal({ scene, onClose }: ChartModalProps) {
     if (!origin) return;
 
     const rect = stage.getBoundingClientRect();
-    const unit = rect.width / viewRef.current.width;
+    const unit = Math.max(rect.width, rect.height) / viewRef.current.width;
     const dx = (event.clientX - origin.x) / unit;
     const dy = (event.clientY - origin.y) / unit;
     dragOrigin.current = { x: event.clientX, y: event.clientY };
