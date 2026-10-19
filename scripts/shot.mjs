@@ -23,6 +23,8 @@ page.on('console', (message) => {
 page.on('pageerror', (error) => errors.push(String(error)));
 
 await page.goto(url, { waitUntil: 'networkidle' });
+await page.getByPlaceholder('上海 / Tokyo / New York').fill('成都');
+await page.getByRole('button', { name: /成都/ }).first().click();
 await page.getByRole('button', { name: '计算这一刻的天空' }).click();
 await page.waitForSelector('table');
 await page.screenshot({ path: out, fullPage: true });

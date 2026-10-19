@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { parseCityDatabase, searchCities, type City } from './core/cities';
 import { computeSnapshot, type SkySnapshot } from './core/ephemeris';
 import { formatOffset, isValidTimeZone, resolveLocalTime } from './core/time';
 
@@ -45,11 +46,43 @@ function formatMagnitude(value: number | null): string {
 
 export default function App() {
   const [form, setForm] = useState<FormState>(DEFAULTS);
+  const [cities, setCities] = useState<City[]>([]);
+  const [cityQuery, setCityQuery] = useState('');
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/data/cities.json')
+      .then((response) => {
+        if (!response.ok) throw new Error(`城市库加载失败: ${response.status}`);
+        return response.json();
+      })
+      .then((raw) => {
+        if (!cancelled) setCities(parseCityDatabase(raw));
+      })
+      .catch(() => {
+        if (!cancelled) setCities([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const matches = cityQuery.trim() && cities.length > 0 ? searchCities(cities, cityQuery, 6) : [];
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((previous) => ({ ...previous, [key]: value }));
+  }
+
+  function chooseCity(city: City): void {
+    setForm((previous) => ({
+      ...previous,
+      timeZone: city.timezone,
+      latitude: city.latitude.toFixed(4),
+      longitude: city.longitude.toFixed(4),
+    }));
+    setCityQuery('');
   }
 
   function handleSubmit(event: React.FormEvent): void {
@@ -92,7 +125,7 @@ export default function App() {
   return (
     <main className="page">
       <header className="masthead">
-        <p className="kicker">M1 · 天文核心</p>
+        <p className="kicker">M2 · 数据层</p>
         <h1>天穹遗嘱</h1>
         <p className="lede">
           输入一个时刻与地点，查看那一刻真实可见的天空。这是计算核心的验证界面，星图将在后续里程碑加入。
@@ -100,6 +133,33 @@ export default function App() {
       </header>
 
       <form className="panel" onSubmit={handleSubmit}>
+        <div className="city-search">
+          <label>
+            <span>查找城市</span>
+            <input
+              type="text"
+              value={cityQuery}
+              onChange={(event) => setCityQuery(event.target.value)}
+              placeholder="上海 / Tokyo / New York"
+              spellCheck={false}
+            />
+          </label>
+          {matches.length > 0 && (
+            <ul className="city-results">
+              {matches.map((city) => (
+                <li key={city.id}>
+                  <button type="button" onClick={() => chooseCity(city)}>
+                    <span className="city-name">{city.zh ?? city.name}</span>
+                    <span className="city-meta">
+                      {city.name} · {city.timezone} · {city.country}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         <div className="fields">
           <label>
             <span>日期</span>

@@ -4,7 +4,7 @@
 
 Sky Testament 是一个**天文记录生成器**。输入一个真实的时刻与地点，它还原那一刻真实可见的天空，并写下一段克制的文字作为注脚。它不预测命运，只记录天空。
 
-**状态**：MVP 开发中 · M1（天文核心）已完成
+**状态**：MVP 开发中 · M2（数据层）已完成
 
 ---
 
@@ -132,11 +132,23 @@ npm run build    # 类型检查 + 生产构建
 npm run shot     # Playwright 截图（channel: chrome，不下载内核）
 ```
 
-已完成（M1）：
+数据管道（原始数据放在 `data-raw/`，不提交）：
 
-- `src/core/time.ts` —— 本地时间 → UTC，覆盖夏令时前拨与回拨
-- `src/core/ephemeris.ts` —— 太阳、月亮、五大行星的赤道与地平坐标
-- 18 个单元测试；4 个天体对照 Horizons，最大偏差 0.33′
+```bash
+npm run build:stars    # HYG v4.2 → src/data/stars.bin + star-names.json
+npm run build:cities   # GeoNames cities15000 → src/data/cities.json
+npm run build:font     # Noto Serif SC → public/fonts/*.woff2
+```
+
+原始数据下载地址：`hygdata_v42.csv.gz`（astronexus.com）、`cities15000.zip`（download.geonames.org/export/dump）、
+`NotoSerifSC[wght].ttf`（google/fonts）。
+
+已完成：
+
+- **M1 天文核心** —— `src/core/time.ts` 本地时间 → UTC，覆盖夏令时前拨与回拨；`src/core/ephemeris.ts` 太阳、月亮、五大行星的赤道与地平坐标；4 个天体对照 Horizons，最大偏差 0.33′
+- **M2 数据层** —— 恒星目录 8,920 颗（mag ≤ 6.5，含自行与 B−V）、城市库 6,285 座（3,588 座带中文名）、字体子集 1,686 字；城市搜索可直接回填时区与经纬度
+
+测试共 35 个。
 
 ## 参与
 

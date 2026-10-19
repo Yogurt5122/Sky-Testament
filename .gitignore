@@ -18,3 +18,6 @@ Thumbs.db
 # logs & temp
 *.log
 .tmp/
+
+# 原始数据集（体积大，由 scripts/fetch-data.mjs 重新下载）
+data-raw/
