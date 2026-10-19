@@ -14,6 +14,10 @@ interface ChartProps {
   labelScale?: number;
   /** 缩放时传入裁剪后的 viewBox，浏览器会按最终尺寸重新栅格化，因此始终清晰 */
   viewBox?: ChartViewBox;
+  /** 点击天体时回调对象 id */
+  onPick?: (id: string) => void;
+  /** 当前选中的对象 id，用于高亮 */
+  selectedId?: string | null;
 }
 
 const CARDINALS = [
@@ -49,7 +53,13 @@ export function moonPhasePath(moon: MoonDisc): string {
   return `M${x},${y - r}A${r},${r} 0 0 ${outerSweep} ${x},${y + r}A${rx},${r} 0 0 ${innerSweep} ${x},${y - r}Z`;
 }
 
-export function Chart({ scene, labelScale = 1, viewBox }: ChartProps) {
+export function Chart({
+  scene,
+  labelScale = 1,
+  viewBox,
+  onPick,
+  selectedId = null,
+}: ChartProps) {
   const { size, center, radius, daylight } = scene;
   const minimal = scene.detail === 'minimal';
   const atlas = scene.detail === 'atlas';
@@ -68,6 +78,33 @@ export function Chart({ scene, labelScale = 1, viewBox }: ChartProps) {
   const viewBoxAttr = viewBox
     ? `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`
     : `0 0 ${size} ${size}`;
+
+  const selectedObject = selectedId
+    ? (scene.objects.find((object) => object.id === selectedId) ?? null)
+    : null;
+
+  const handleClick = (event: React.MouseEvent<SVGSVGElement>) => {
+    if (!onPick) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const vb = viewBox ?? { x: 0, y: 0, width: size, height: size };
+    const scale = Math.max(rect.width / vb.width, rect.height / vb.height);
+    const offsetX = (rect.width - vb.width * scale) / 2;
+    const offsetY = (rect.height - vb.height * scale) / 2;
+    const x = vb.x + (event.clientX - rect.left - offsetX) / scale;
+    const y = vb.y + (event.clientY - rect.top - offsetY) / scale;
+
+    let bestId: string | null = null;
+    let bestDistance = 16;
+    for (const object of scene.objects) {
+      const distance = Math.hypot(object.x - x, object.y - y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestId = object.id;
+      }
+    }
+    if (bestId) onPick(bestId);
+  };
 
   const tickMarks = Array.from({ length: 36 }, (_, index) => {
     const azimuth = index * 10;
@@ -92,6 +129,8 @@ export function Chart({ scene, labelScale = 1, viewBox }: ChartProps) {
       preserveAspectRatio="xMidYMid slice"
       role="img"
       aria-label={`${daylight ? '白昼' : '夜间'}星空，可见 ${scene.starCount} 颗恒星`}
+      onClick={handleClick}
+      style={onPick ? { cursor: 'crosshair' } : undefined}
     >
       <circle className="chart-disc" cx={center} cy={center} r={radius} />
 
@@ -248,6 +287,15 @@ export function Chart({ scene, labelScale = 1, viewBox }: ChartProps) {
         >
           天顶
         </text>
+      )}
+
+      {selectedObject && (
+        <circle
+          className="chart-selected"
+          cx={selectedObject.x}
+          cy={selectedObject.y}
+          r={13}
+        />
       )}
 
       <circle className="chart-zenith" cx={center} cy={center} r={1.6} />

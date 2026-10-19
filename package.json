@@ -1,7 +1,7 @@
 {
   "name": "sky-testament",
   "private": true,
-  "version": "0.5.2",
+  "version": "0.5.3",
   "type": "module",
   "description": "输入一个时刻和地点，生成那张天空的星图，以及一段墓志铭",
   "engines": {

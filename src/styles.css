@@ -232,7 +232,7 @@ h1 {
 
 .fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px 20px;
 }
 
@@ -288,6 +288,53 @@ button:hover {
 
 .result {
   margin-top: 48px;
+}
+
+.chart-column {
+  min-width: 0;
+}
+
+.info-rail {
+  min-width: 0;
+}
+
+/* 宽屏：星图与文案在左，时刻表与数据在右侧信息栏 */
+@media (min-width: 1100px) {
+  .page {
+    max-width: 1400px;
+  }
+
+  .masthead,
+  .panel {
+    max-width: 920px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .result {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    align-items: start;
+    gap: 48px;
+  }
+
+  .info-rail {
+    position: sticky;
+    top: 24px;
+  }
+
+  .info-rail .night-now {
+    margin-left: 0;
+  }
+
+  .info-rail .meta {
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 20px;
+  }
+
+  .info-rail .epitaph {
+    display: none;
+  }
 }
 
 .meta {
@@ -667,6 +714,126 @@ body.theme-night .chart-moon-lit {
 .chart-zenith {
   fill: var(--ink);
   opacity: 0.5;
+}
+
+.chart-selected {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.1;
+  opacity: 0.9;
+}
+
+.object-panel {
+  margin: 0 0 40px;
+  padding: 18px 22px;
+  border: 1px solid var(--rule);
+}
+
+.object-panel header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.object-panel h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.object-panel header span {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+}
+
+.object-panel header button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.object-panel dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px 24px;
+  margin: 0;
+}
+
+.object-panel dt {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
+}
+
+.object-panel dd {
+  margin: 3px 0 0;
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.object-panel--floating {
+  position: absolute;
+  left: 22px;
+  bottom: 22px;
+  z-index: 3;
+  width: min(360px, calc(100vw - 44px));
+  margin: 0;
+  background: var(--overlay);
+  border-color: var(--rule);
+  backdrop-filter: blur(6px);
+}
+
+.events {
+  margin: 0 0 40px;
+}
+
+.events .option-label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.events ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.events li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+}
+
+.events strong {
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.events li span {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
 }
 
 .chart--day .chart-disc {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Chart } from './Chart';
+import type { ObjectDetails } from '../core/details';
+import { ObjectPanel } from './ObjectPanel';
 import type { ChartScene } from './scene';
 
 const SCENE_SIZE = 1000;
@@ -30,6 +32,10 @@ function clampView(view: View): View {
 interface ChartModalProps {
   scene: ChartScene;
   onClose: () => void;
+  onPick?: (id: string) => void;
+  selectedId?: string | null;
+  details?: ObjectDetails | null;
+  onClearSelection?: () => void;
 }
 
 /**
@@ -39,7 +45,14 @@ interface ChartModalProps {
  * 浏览器会按最终尺寸重新栅格化矢量，任何倍率都清晰，
  * 标签字号按 viewBox 比例反向缩小，因此屏幕上大小恒定。
  */
-export function ChartModal({ scene, onClose }: ChartModalProps) {
+export function ChartModal({
+  scene,
+  onClose,
+  onPick,
+  selectedId,
+  details,
+  onClearSelection,
+}: ChartModalProps) {
   const [view, setView] = useState<View>({ x: 0, y: 0, width: SCENE_SIZE });
 
   const viewRef = useRef(view);
@@ -205,8 +218,14 @@ export function ChartModal({ scene, onClose }: ChartModalProps) {
           scene={scene}
           viewBox={{ x: view.x, y: view.y, width: view.width, height: view.width }}
           labelScale={view.width / SCENE_SIZE}
+          onPick={onPick}
+          selectedId={selectedId}
         />
       </div>
+
+      {details && onClearSelection && (
+        <ObjectPanel details={details} onClose={onClearSelection} floating />
+      )}
 
       <div className="chart-modal-controls">
         <button type="button" onClick={() => zoomAt(1 / 1.4)} aria-label="缩小">

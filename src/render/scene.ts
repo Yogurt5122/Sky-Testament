@@ -51,6 +51,18 @@ export interface ConstellationFigurePath {
   y: number;
 }
 
+/** 可点击的天体：用于详情面板 */
+export interface SceneObject {
+  id: string;
+  kind: 'star' | 'planet' | 'moon';
+  name: string;
+  x: number;
+  y: number;
+  magnitude: number | null;
+  hip?: number;
+  bodyId?: string;
+}
+
 export interface ChartScene {
   size: number;
   center: number;
@@ -61,6 +73,7 @@ export interface ChartScene {
   planets: PlanetDot[];
   moon: MoonDisc | null;
   constellations: ConstellationFigurePath[];
+  objects: SceneObject[];
   labels: SceneLabel[];
   /** 黄道与天赤道（仅 atlas 档计算） */
   ecliptic: string;
@@ -175,6 +188,7 @@ export function buildChartScene(
   );
   const bucketCounts = BUCKETS.map(() => Array.from({ length: COLOR_BIN_COUNT }, () => 0));
   const labelCandidates: Array<{ x: number; y: number; mag: number; text: string }> = [];
+  const objects: SceneObject[] = [];
   let starCount = 0;
   let brightestStar: string | null = null;
   let brightestMagnitude = Number.POSITIVE_INFINITY;
@@ -199,6 +213,18 @@ export function buildChartScene(
     starCount += 1;
 
     const name = names.get(star.hip);
+    if (star.mag <= 4.0) {
+      objects.push({
+        id: `star-${star.hip}`,
+        kind: 'star',
+        name: name ?? '',
+        x,
+        y,
+        magnitude: star.mag,
+        hip: star.hip,
+      });
+    }
+
     if (name && horizontal.altitude > 5) {
       if (star.mag < brightestMagnitude) {
         brightestMagnitude = star.mag;
@@ -294,6 +320,15 @@ export function buildChartScene(
               : '月亮',
         });
       }
+      objects.push({
+        id: 'moon',
+        kind: 'moon',
+        name: '月亮',
+        x,
+        y,
+        magnitude: -10,
+        bodyId: 'moon',
+      });
       continue;
     }
 
@@ -302,6 +337,15 @@ export function buildChartScene(
       body.id === 'sun' ? 9 : magnitude < 0 ? 5 : magnitude < 1 ? 4.2 : magnitude < 2.5 ? 3.4 : 2.8;
 
     planets.push({ x, y, r: dotRadius, name: body.name, magnitude: body.magnitude });
+    objects.push({
+      id: `body-${body.id}`,
+      kind: 'planet',
+      name: body.name,
+      x,
+      y,
+      magnitude: body.magnitude,
+      bodyId: body.id,
+    });
     if (detail !== 'minimal') {
       planetLabels.push({
         x,
@@ -417,6 +461,7 @@ export function buildChartScene(
     planets,
     moon,
     constellations,
+    objects,
     labels,
     ecliptic,
     equator,

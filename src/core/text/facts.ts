@@ -10,6 +10,8 @@ export interface SkyFacts {
   brightestStar: string | null;
   season: Season;
   daylight: boolean;
+  /** 这一夜值得写进文案的天象，例如「月全食」 */
+  events: string[];
 }
 
 const DIRECTIONS = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
@@ -32,7 +34,11 @@ function seasonOf(monthIndex: number): Season {
  *
  * 行星只取地平线以上、亮度最高的两颗；恒星由调用方传入场景中可见的最亮星名。
  */
-export function deriveFacts(snapshot: SkySnapshot, brightestStar: string | null): SkyFacts {
+export function deriveFacts(
+  snapshot: SkySnapshot,
+  brightestStar: string | null,
+  events: string[] = [],
+): SkyFacts {
   const planets = snapshot.bodies
     .filter((body) => body.altitude > 10 && body.id !== 'sun' && body.id !== 'moon')
     .sort((a, b) => (a.magnitude ?? 9) - (b.magnitude ?? 9))
@@ -46,5 +52,6 @@ export function deriveFacts(snapshot: SkySnapshot, brightestStar: string | null)
     brightestStar,
     season: seasonOf(new Date(snapshot.utc).getUTCMonth()),
     daylight: snapshot.daylight,
+    events,
   };
 }

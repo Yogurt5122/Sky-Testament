@@ -192,8 +192,14 @@ export function generateEpitaph(input: EpitaphInput): Epitaph {
   const digest = sha256(encodeUtf8(canonical));
   const rng = new Rng(digest.slice(0, 16));
 
-  const text =
+  const body =
     input.style === 'classical' ? composeClassical(input.facts, rng) : composeModern(input.facts, rng);
+
+  // 有值得记住的天象时，先点出来
+  const event = input.facts.events[0];
+  const text = event
+    ? `${input.style === 'classical' ? `适逢${event}。` : `那晚有${event}。`}${body}`
+    : body;
 
   const seed = Array.from(digest.slice(0, 4))
     .map((byte) => byte.toString(16).padStart(2, '0'))

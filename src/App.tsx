@@ -9,6 +9,9 @@ import { ChartModal } from './render/ChartModal';
 import { buildChartScene, type DetailLevel } from './render/scene';
 import { deriveFacts } from './core/text/facts';
 import { generateEpitaph, type TextStyle } from './core/text/epitaph';
+import { findNightEvents } from './core/events';
+import { bodyDetails, starDetails } from './core/details';
+import { ObjectPanel } from './render/ObjectPanel';
 import starNamesZh from './data/star-names-zh.json';
 
 const NAME_ZH = starNamesZh as Record<string, string>;
@@ -97,6 +100,7 @@ export default function App() {
   const [nightMinutes, setNightMinutes] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(2);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const minutesRef = useRef(0);
 
   const qualityOption = SKY_QUALITY.find((option) => option.id === quality) ?? SKY_QUALITY[1];
@@ -203,9 +207,39 @@ export default function App() {
     });
   }, [displaySnapshot, stars, starNames, qualityOption.limit, detail]);
 
+  const events = useMemo(
+    () => (result ? findNightEvents(nightWindow, result.snapshot.geo) : []),
+    [result, nightWindow],
+  );
+
+  const selectedObject = selectedId
+    ? (scene?.objects.find((object) => object.id === selectedId) ?? null)
+    : null;
+
+  const details = useMemo(() => {
+    if (!selectedObject || !displaySnapshot) return null;
+
+    if (selectedObject.kind === 'star') {
+      const star = stars.find((item) => item.hip === selectedObject.hip);
+      if (!star) return null;
+      return starDetails(star, selectedObject.name || null, displaySnapshot, timeZone);
+    }
+
+    return bodyDetails(
+      selectedObject.bodyId ?? 'moon',
+      selectedObject.name,
+      displaySnapshot,
+      timeZone,
+    );
+  }, [selectedObject, displaySnapshot, stars, timeZone]);
+
   const epitaph = useMemo(() => {
     if (!result || nightMinutes !== null) return null;
-    const facts = deriveFacts(result.snapshot, scene?.brightestStar ?? null);
+    const facts = deriveFacts(
+      result.snapshot,
+      scene?.brightestStar ?? null,
+      events.map((event) => event.title),
+    );
     return generateEpitaph({
       facts,
       utc: result.snapshot.utc,
@@ -214,7 +248,7 @@ export default function App() {
       style: textStyle,
       variant,
     });
-  }, [result, scene, textStyle, variant]);
+  }, [result, scene, events, textStyle, variant]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -270,6 +304,7 @@ export default function App() {
       setVariant(0);
       setNightMinutes(null);
       setPlaying(false);
+      setSelectedId(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -309,6 +344,7 @@ export default function App() {
       });
       setNightMinutes(null);
       setPlaying(false);
+      setSelectedId(null);
     },
     [result, nightWindow, form.timeZone],
   );
@@ -357,7 +393,7 @@ export default function App() {
   return (
     <main className="page">
       <header className="masthead">
-        <p className="kicker">M4 · 夜空</p>
+        <p className="kicker">M5 · 详情与天象</p>
         <h1>天穹遗嘱</h1>
         <p className="lede">
           输入一个时刻与地点，还原那一刻真实可见的天空。球极投影，天顶居中，地平线为外圈。
@@ -529,206 +565,238 @@ export default function App() {
 
       {result && displaySnapshot && (
         <section className="result">
-          {scene && (
-            <>
-              <figure className="chart-figure">
-                <Chart scene={scene} />
-                <figcaption>
-                  {scene.daylight ? '白昼的天空 · ' : ''}
-                  可见恒星 {scene.starCount} 颗 · 极限 {scene.limitingMagnitude} 等 · 球极投影
-                </figcaption>
-              </figure>
-              <div className="chart-actions">
-                <button type="button" className="chart-trigger" onClick={() => setChartOpen(true)}>
-                  查看星图
-                </button>
-              </div>
-            </>
-          )}
-
-          {nightWindow && (
-            <section className="night">
-              <div className="night-head">
-                <span className="option-label">这一夜</span>
-                <span className="night-window">
-                  {sunsetLocal?.date.slice(5)} {sunsetLocal?.label}
-                  {' — '}
-                  {sunriseLocal?.date.slice(5)} {sunriseLocal?.label}
-                </span>
-                <span className="night-now">{currentLocal?.label}</span>
-                <div className="segmented night-speed">
-                  {[0.5, 1, 2].map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={speed === value ? 'is-active' : ''}
-                      onClick={() => setSpeed(value)}
-                      aria-label={`${value} 倍速`}
-                    >
-                      {value}×
-                    </button>
-                  ))}
+          <div className="chart-column">
+            {scene && (
+              <>
+                <figure className="chart-figure">
+                  <Chart scene={scene} onPick={setSelectedId} selectedId={selectedId} />
+                  <figcaption>
+                    {scene.daylight ? '白昼的天空 · ' : ''}
+                    可见恒星 {scene.starCount} 颗 · 极限 {scene.limitingMagnitude} 等 · 球极投影
+                    {scene.objects.length > 0 ? ' · 点击天体查看详情' : ''}
+                  </figcaption>
+                </figure>
+                <div className="chart-actions">
+                  <button type="button" className="chart-trigger" onClick={() => setChartOpen(true)}>
+                    查看星图
+                  </button>
                 </div>
-                <button type="button" className="night-play" onClick={togglePlay}>
-                  {playing ? '暂停' : '播放'}
-                </button>
+              </>
+            )}
+
+            {epitaph && (
+              <section className="epitaph">
+                <div className="epitaph-head">
+                  <span className="option-label">文案</span>
+                  <div className="segmented">
+                    <button
+                      type="button"
+                      className={textStyle === 'classical' ? 'is-active' : ''}
+                      onClick={() => setTextStyle('classical')}
+                    >
+                      古典
+                    </button>
+                    <button
+                      type="button"
+                      className={textStyle === 'modern' ? 'is-active' : ''}
+                      onClick={() => setTextStyle('modern')}
+                    >
+                      现代
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="epitaph-reroll"
+                    onClick={() => setVariant((value) => value + 1)}
+                  >
+                    换一版
+                  </button>
+                </div>
+
+                <p className="epitaph-text">{epitaph.text}</p>
+                <p className="epitaph-seed">
+                  seed {epitaph.seed} · 同一时刻同一地点，永远得到这一段
+                </p>
+              </section>
+            )}
+          </div>
+
+          <aside className="info-rail">
+            {details && <ObjectPanel details={details} onClose={() => setSelectedId(null)} />}
+
+            {nightWindow && (
+              <section className="night">
+                <div className="night-head">
+                  <span className="option-label">这一夜</span>
+                  <span className="night-window">
+                    {sunsetLocal?.date.slice(5)} {sunsetLocal?.label}
+                    {' — '}
+                    {sunriseLocal?.date.slice(5)} {sunriseLocal?.label}
+                  </span>
+                  <span className="night-now">{currentLocal?.label}</span>
+                  <div className="segmented night-speed">
+                    {[0.5, 1, 2].map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={speed === value ? 'is-active' : ''}
+                        onClick={() => setSpeed(value)}
+                        aria-label={`${value} 倍速`}
+                      >
+                        {value}×
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" className="night-play" onClick={togglePlay}>
+                    {playing ? '暂停' : '播放'}
+                  </button>
+                </div>
+
+                <div className="night-slider">
+                  <button
+                    type="button"
+                    className="night-day"
+                    onClick={() => shiftDate(-1)}
+                    aria-label="前一日"
+                    title="前一日"
+                  >
+                    ‹
+                  </button>
+
+                  <input
+                    className="night-range"
+                    type="range"
+                    min={0}
+                    max={Math.round(totalMinutes)}
+                    step={1}
+                    value={Math.round(currentMinutes)}
+                    aria-label="这一夜的时间轴"
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      minutesRef.current = value;
+                      setNightMinutes(value);
+                    }}
+                    onPointerUp={() => commitNight(minutesRef.current)}
+                    onKeyUp={() => commitNight(minutesRef.current)}
+                  />
+
+                  <button
+                    type="button"
+                    className="night-day"
+                    onClick={() => shiftDate(1)}
+                    aria-label="后一日"
+                    title="后一日"
+                  >
+                    ›
+                  </button>
+                </div>
+
+                <div className="night-scale">
+                  <span>日落</span>
+                  <span>午夜</span>
+                  <span>日出</span>
+                </div>
+
+                {nightMinutes !== null && (
+                  <p className="night-hint">预览中 · 松开后应用，并重新生成文案</p>
+                )}
+              </section>
+            )}
+
+            {events.length > 0 && (
+              <section className="events">
+                <span className="option-label">这一夜的天象</span>
+                <ul>
+                  {events.map((event) => (
+                    <li key={event.title}>
+                      <strong>{event.title}</strong>
+                      <span>
+                        {event.detail}
+                        {event.at ? ` · ${localDateTimeOf(event.at, timeZone).label}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            <dl className="meta">
+              <div>
+                <dt>UTC</dt>
+                <dd>{displaySnapshot.utc.replace('.000Z', 'Z')}</dd>
               </div>
-
-              <div className="night-slider">
-                <button
-                  type="button"
-                  className="night-day"
-                  onClick={() => shiftDate(-1)}
-                  aria-label="前一日"
-                  title="前一日"
-                >
-                  ‹
-                </button>
-
-                <input
-                  className="night-range"
-                  type="range"
-                  min={0}
-                  max={Math.round(totalMinutes)}
-                  step={1}
-                  value={Math.round(currentMinutes)}
-                  aria-label="这一夜的时间轴"
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    minutesRef.current = value;
-                    setNightMinutes(value);
-                  }}
-                  onPointerUp={() => commitNight(minutesRef.current)}
-                  onKeyUp={() => commitNight(minutesRef.current)}
-                />
-
-                <button
-                  type="button"
-                  className="night-day"
-                  onClick={() => shiftDate(1)}
-                  aria-label="后一日"
-                  title="后一日"
-                >
-                  ›
-                </button>
+              <div>
+                <dt>UTC 偏移</dt>
+                <dd>{displayOffset}</dd>
               </div>
-
-              <div className="night-scale">
-                <span>日落</span>
-                <span>午夜</span>
-                <span>日出</span>
+              <div>
+                <dt>坐标</dt>
+                <dd>
+                  {displaySnapshot.geo.latitude}°, {displaySnapshot.geo.longitude}°
+                </dd>
               </div>
+              <div>
+                <dt>天空</dt>
+                <dd>{displaySnapshot.daylight ? '白昼' : '夜间'}</dd>
+              </div>
+              <div>
+                <dt>月相</dt>
+                <dd>
+                  {displaySnapshot.moon.phaseName} · 照亮{' '}
+                  {(displaySnapshot.moon.illumination * 100).toFixed(1)}%
+                </dd>
+              </div>
+              <div>
+                <dt>太阳高度</dt>
+                <dd>{formatAltitude(displaySnapshot.sunAltitude)}</dd>
+              </div>
+            </dl>
 
-              {nightMinutes !== null && (
-                <p className="night-hint">预览中 · 松开后应用，并重新生成文案</p>
-              )}
-            </section>
-          )}
+            {result.skipped && nightMinutes === null && (
+              <p className="notice">
+                这个本地时间在 {form.timeZone} 不存在（夏令时前拨），已顺延为 {result.snapshot.utc}。
+              </p>
+            )}
+            {result.ambiguous && nightMinutes === null && (
+              <p className="notice">
+                这个本地时间在 {form.timeZone} 出现两次（夏令时回拨），此处取较早的一次。
+              </p>
+            )}
+
+            <table>
+              <thead>
+                <tr>
+                  <th>天体</th>
+                  <th className="num">高度</th>
+                  <th className="num">方位</th>
+                  <th className="num">星等</th>
+                  <th>位置</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bodies.map((body) => (
+                  <tr key={body.id} className={body.aboveHorizon ? '' : 'below'}>
+                    <td>{body.name}</td>
+                    <td className="num">{formatAltitude(body.altitude)}</td>
+                    <td className="num">{body.azimuth.toFixed(1)}°</td>
+                    <td className="num">{formatMagnitude(body.magnitude)}</td>
+                    <td>{body.aboveHorizon ? '地平线以上' : '地平线以下'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </aside>
 
           {chartOpen && scene && (
-            <ChartModal scene={scene} onClose={() => setChartOpen(false)} />
+            <ChartModal
+              scene={scene}
+              onClose={() => setChartOpen(false)}
+              onPick={setSelectedId}
+              selectedId={selectedId}
+              details={details}
+              onClearSelection={() => setSelectedId(null)}
+            />
           )}
-
-          {epitaph && (
-            <section className="epitaph">
-              <div className="epitaph-head">
-                <span className="option-label">文案</span>
-                <div className="segmented">
-                  <button
-                    type="button"
-                    className={textStyle === 'classical' ? 'is-active' : ''}
-                    onClick={() => setTextStyle('classical')}
-                  >
-                    古典
-                  </button>
-                  <button
-                    type="button"
-                    className={textStyle === 'modern' ? 'is-active' : ''}
-                    onClick={() => setTextStyle('modern')}
-                  >
-                    现代
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="epitaph-reroll"
-                  onClick={() => setVariant((value) => value + 1)}
-                >
-                  换一版
-                </button>
-              </div>
-
-              <p className="epitaph-text">{epitaph.text}</p>
-              <p className="epitaph-seed">
-                seed {epitaph.seed} · 同一时刻同一地点，永远得到这一段
-              </p>
-            </section>
-          )}
-
-          <dl className="meta">
-            <div>
-              <dt>UTC</dt>
-              <dd>{displaySnapshot.utc.replace('.000Z', 'Z')}</dd>
-            </div>
-            <div>
-              <dt>UTC 偏移</dt>
-              <dd>{displayOffset}</dd>
-            </div>
-            <div>
-              <dt>坐标</dt>
-              <dd>
-                {displaySnapshot.geo.latitude}°, {displaySnapshot.geo.longitude}°
-              </dd>
-            </div>
-            <div>
-              <dt>天空</dt>
-              <dd>{displaySnapshot.daylight ? '白昼' : '夜间'}</dd>
-            </div>
-            <div>
-              <dt>月相</dt>
-              <dd>
-                {displaySnapshot.moon.phaseName} · 照亮 {(displaySnapshot.moon.illumination * 100).toFixed(1)}%
-              </dd>
-            </div>
-            <div>
-              <dt>太阳高度</dt>
-              <dd>{formatAltitude(displaySnapshot.sunAltitude)}</dd>
-            </div>
-          </dl>
-
-          {result.skipped && nightMinutes === null && (
-            <p className="notice">
-              这个本地时间在 {form.timeZone} 不存在（夏令时前拨），已顺延为 {result.snapshot.utc}。
-            </p>
-          )}
-          {result.ambiguous && nightMinutes === null && (
-            <p className="notice">
-              这个本地时间在 {form.timeZone} 出现两次（夏令时回拨），此处取较早的一次。
-            </p>
-          )}
-
-          <table>
-            <thead>
-              <tr>
-                <th>天体</th>
-                <th className="num">高度</th>
-                <th className="num">方位</th>
-                <th className="num">星等</th>
-                <th>位置</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bodies.map((body) => (
-                <tr key={body.id} className={body.aboveHorizon ? '' : 'below'}>
-                  <td>{body.name}</td>
-                  <td className="num">{formatAltitude(body.altitude)}</td>
-                  <td className="num">{body.azimuth.toFixed(1)}°</td>
-                  <td className="num">{formatMagnitude(body.magnitude)}</td>
-                  <td>{body.aboveHorizon ? '地平线以上' : '地平线以下'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </section>
       )}
 

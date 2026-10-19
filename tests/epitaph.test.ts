@@ -11,6 +11,7 @@ const facts: SkyFacts = {
   brightestStar: '天狼星',
   season: '秋',
   daylight: false,
+  events: [],
 };
 
 const base: EpitaphInput = {
@@ -104,6 +105,21 @@ describe('generateEpitaph', () => {
       expect(classical.length).toBeGreaterThanOrEqual(14);
       expect(classical.length).toBeLessThanOrEqual(90);
     }
+  });
+
+  it('有天文事件时会在开头点出来', () => {
+    const classical = generateEpitaph({
+      ...base,
+      facts: { ...facts, events: ['月全食'] },
+    }).text;
+    expect(classical.startsWith('适逢月全食。')).toBe(true);
+
+    const modern = generateEpitaph({
+      ...base,
+      style: 'modern',
+      facts: { ...facts, events: ['月全食'] },
+    }).text;
+    expect(modern.startsWith('那晚有月全食。')).toBe(true);
   });
 
   it('canonicalKey 使用 UTC 与四位小数坐标', () => {
