@@ -65,6 +65,8 @@ export interface ChartScene {
   /** 黄道与天赤道（仅 atlas 档计算） */
   ecliptic: string;
   equator: string;
+  /** 地平线以上、有中文名的最亮恒星 */
+  brightestStar: string | null;
   starCount: number;
   limitingMagnitude: number;
 }
@@ -174,6 +176,8 @@ export function buildChartScene(
   const bucketCounts = BUCKETS.map(() => Array.from({ length: COLOR_BIN_COUNT }, () => 0));
   const labelCandidates: Array<{ x: number; y: number; mag: number; text: string }> = [];
   let starCount = 0;
+  let brightestStar: string | null = null;
+  let brightestMagnitude = Number.POSITIVE_INFINITY;
 
   for (const star of stars) {
     if (star.mag > limitingMagnitude) continue;
@@ -195,8 +199,14 @@ export function buildChartScene(
     starCount += 1;
 
     const name = names.get(star.hip);
-    if (name && star.mag <= 2.2) {
-      labelCandidates.push({ x, y, mag: star.mag, text: name });
+    if (name && horizontal.altitude > 5) {
+      if (star.mag < brightestMagnitude) {
+        brightestMagnitude = star.mag;
+        brightestStar = name;
+      }
+      if (star.mag <= 2.2) {
+        labelCandidates.push({ x, y, mag: star.mag, text: name });
+      }
     }
   }
 
@@ -410,6 +420,7 @@ export function buildChartScene(
     labels,
     ecliptic,
     equator,
+    brightestStar,
     starCount,
     limitingMagnitude,
   };

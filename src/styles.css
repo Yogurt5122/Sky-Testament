@@ -690,6 +690,61 @@ body.theme-night .chart-moon-lit {
   text-align: center;
 }
 
+.epitaph {
+  margin: 4px 0 48px;
+  padding: 34px 28px 30px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  text-align: center;
+}
+
+.epitaph-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.epitaph-reroll {
+  width: auto;
+  margin: 0;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-family: var(--serif);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.epitaph-reroll:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.epitaph-text {
+  margin: 0;
+  max-width: 24em;
+  margin-inline: auto;
+  font-size: clamp(17px, 2.1vw, 21px);
+  line-height: 2.05;
+  letter-spacing: 0.08em;
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+
+.epitaph-seed {
+  margin: 18px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  opacity: 0.65;
+}
+
 .footer {
   margin-top: 56px;
   padding-top: 20px;

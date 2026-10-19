@@ -6,6 +6,8 @@ import { formatOffset, isValidTimeZone, resolveLocalTime } from './core/time';
 import { Chart } from './render/Chart';
 import { ChartModal } from './render/ChartModal';
 import { buildChartScene, type DetailLevel } from './render/scene';
+import { deriveFacts } from './core/text/facts';
+import { generateEpitaph, type TextStyle } from './core/text/epitaph';
 import starNamesZh from './data/star-names-zh.json';
 
 const NAME_ZH = starNamesZh as Record<string, string>;
@@ -89,6 +91,8 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>('night');
   const [quality, setQuality] = useState<QualityId>('suburb');
   const [detail, setDetail] = useState<DetailLevel>('standard');
+  const [textStyle, setTextStyle] = useState<TextStyle>('classical');
+  const [variant, setVariant] = useState(0);
 
   const qualityOption = SKY_QUALITY.find((option) => option.id === quality) ?? SKY_QUALITY[1];
 
@@ -153,6 +157,19 @@ export default function App() {
     });
   }, [result, stars, starNames, qualityOption.limit, detail]);
 
+  const epitaph = useMemo(() => {
+    if (!result) return null;
+    const facts = deriveFacts(result.snapshot, scene?.brightestStar ?? null);
+    return generateEpitaph({
+      facts,
+      utc: result.snapshot.utc,
+      latitude: result.snapshot.geo.latitude,
+      longitude: result.snapshot.geo.longitude,
+      style: textStyle,
+      variant,
+    });
+  }, [result, scene, textStyle, variant]);
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((previous) => ({ ...previous, [key]: value }));
   }
@@ -199,6 +216,7 @@ export default function App() {
 
       // 白昼用纸面、夜间用夜空，避免浅色圆盘压在深色页面上
       setTheme(snapshot.daylight ? 'paper' : 'night');
+      setVariant(0);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -402,6 +420,42 @@ export default function App() {
 
           {chartOpen && scene && (
             <ChartModal scene={scene} onClose={() => setChartOpen(false)} />
+          )}
+
+          {epitaph && (
+            <section className="epitaph">
+              <div className="epitaph-head">
+                <span className="option-label">文案</span>
+                <div className="segmented">
+                  <button
+                    type="button"
+                    className={textStyle === 'classical' ? 'is-active' : ''}
+                    onClick={() => setTextStyle('classical')}
+                  >
+                    古典
+                  </button>
+                  <button
+                    type="button"
+                    className={textStyle === 'modern' ? 'is-active' : ''}
+                    onClick={() => setTextStyle('modern')}
+                  >
+                    现代
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="epitaph-reroll"
+                  onClick={() => setVariant((value) => value + 1)}
+                >
+                  换一版
+                </button>
+              </div>
+
+              <p className="epitaph-text">{epitaph.text}</p>
+              <p className="epitaph-seed">
+                seed {epitaph.seed} · 同一时刻同一地点，永远得到这一段
+              </p>
+            </section>
           )}
 
           <dl className="meta">
