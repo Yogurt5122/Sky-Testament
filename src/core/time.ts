@@ -113,3 +113,34 @@ export function isValidTimeZone(timeZone: string): boolean {
     return false;
   }
 }
+
+export interface LocalDateTime {
+  /** YYYY-MM-DD */
+  date: string;
+  /** HH:mm */
+  time: string;
+  /** 便于展示的 HH:mm */
+  label: string;
+}
+
+/** 把 UTC 时刻换算成某时区的日期与时间，用于回填输入框。 */
+export function localDateTimeOf(instant: Date, timeZone: string): LocalDateTime {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(instant);
+
+  const pick = (type: string): string => parts.find((part) => part.type === type)?.value ?? '00';
+  const hour = pick('hour') === '24' ? '00' : pick('hour');
+
+  return {
+    date: `${pick('year')}-${pick('month')}-${pick('day')}`,
+    time: `${hour}:${pick('minute')}`,
+    label: `${hour}:${pick('minute')}`,
+  };
+}

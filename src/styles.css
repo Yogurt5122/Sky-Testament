@@ -690,6 +690,127 @@ body.theme-night .chart-moon-lit {
   text-align: center;
 }
 
+.night {
+  margin: 0 0 44px;
+  padding: 18px 22px 14px;
+  border: 1px solid var(--rule);
+}
+
+.night-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.night-window {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+.night-now {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+
+.night-slider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.night-slider .night-range {
+  flex: 1;
+}
+
+.night-day {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.night-day:hover {
+  border-color: var(--ink);
+}
+
+.night-speed button {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.night-play {
+  width: auto;
+  margin: 0;
+  padding: 5px 14px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.night-play:hover {
+  border-color: var(--ink);
+}
+
+.night-range {
+  width: 100%;
+  height: 2px;
+  appearance: none;
+  background: var(--rule);
+  outline: none;
+  cursor: pointer;
+}
+
+.night-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--ink);
+}
+
+.night-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--ink);
+}
+
+.night-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+}
+
+.night-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--accent);
+}
+
 .epitaph {
   margin: 4px 0 48px;
   padding: 34px 28px 30px;

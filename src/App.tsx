@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseCityDatabase, searchCities, type City } from './core/cities';
 import { computeSnapshot, type SkySnapshot } from './core/ephemeris';
+import { computeNightWindow } from './core/night';
 import { parseStarCatalog, type Star } from './core/starcatalog';
-import { formatOffset, isValidTimeZone, resolveLocalTime } from './core/time';
+import { formatOffset, isValidTimeZone, localDateTimeOf, offsetSecondsAt, resolveLocalTime } from './core/time';
 import { Chart } from './render/Chart';
 import { ChartModal } from './render/ChartModal';
 import { buildChartScene, type DetailLevel } from './render/scene';
@@ -93,6 +94,10 @@ export default function App() {
   const [detail, setDetail] = useState<DetailLevel>('standard');
   const [textStyle, setTextStyle] = useState<TextStyle>('classical');
   const [variant, setVariant] = useState(0);
+  const [nightMinutes, setNightMinutes] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(2);
+  const minutesRef = useRef(0);
 
   const qualityOption = SKY_QUALITY.find((option) => option.id === quality) ?? SKY_QUALITY[1];
 
@@ -149,16 +154,57 @@ export default function App() {
     cityQuery.trim().length > 0 && cities.length > 0 && cityQuery.trim() !== selectedLabel;
   const matches = showMatches ? searchCities(cities, cityQuery, 6) : [];
 
+  const nightWindow = useMemo(() => {
+    if (!result) return null;
+    return computeNightWindow(new Date(result.snapshot.utc), result.snapshot.geo);
+  }, [result]);
+
+  const totalMinutes = nightWindow
+    ? (nightWindow.sunrise.getTime() - nightWindow.sunset.getTime()) / 60000
+    : 0;
+
+  const previewSnapshot = useMemo(() => {
+    if (!result || !nightWindow || nightMinutes === null) return null;
+    const instant = new Date(nightWindow.sunset.getTime() + nightMinutes * 60000);
+    return computeSnapshot(instant, result.snapshot.geo);
+  }, [result, nightWindow, nightMinutes]);
+
+  const displaySnapshot = previewSnapshot ?? result?.snapshot ?? null;
+
+  const displayOffset = displaySnapshot
+    ? formatOffset(
+        offsetSecondsAt(new Date(displaySnapshot.utc).getTime(), form.timeZone.trim()),
+      )
+    : '';
+
+  const currentMinutes =
+    nightWindow && displaySnapshot
+      ? Math.min(
+          totalMinutes,
+          Math.max(
+            0,
+            (new Date(displaySnapshot.utc).getTime() - nightWindow.sunset.getTime()) / 60000,
+          ),
+        )
+      : 0;
+
+  const timeZone = form.timeZone.trim();
+  const sunsetLocal = nightWindow ? localDateTimeOf(nightWindow.sunset, timeZone) : null;
+  const sunriseLocal = nightWindow ? localDateTimeOf(nightWindow.sunrise, timeZone) : null;
+  const currentLocal = displaySnapshot
+    ? localDateTimeOf(new Date(displaySnapshot.utc), timeZone)
+    : null;
+
   const scene = useMemo(() => {
-    if (!result || stars.length === 0) return null;
-    return buildChartScene(result.snapshot, stars, starNames, {
+    if (!displaySnapshot || stars.length === 0) return null;
+    return buildChartScene(displaySnapshot, stars, starNames, {
       limitingMagnitude: qualityOption.limit,
       detail,
     });
-  }, [result, stars, starNames, qualityOption.limit, detail]);
+  }, [displaySnapshot, stars, starNames, qualityOption.limit, detail]);
 
   const epitaph = useMemo(() => {
-    if (!result) return null;
+    if (!result || nightMinutes !== null) return null;
     const facts = deriveFacts(result.snapshot, scene?.brightestStar ?? null);
     return generateEpitaph({
       facts,
@@ -185,26 +231,31 @@ export default function App() {
     setCityQuery(city.zh ?? city.name);
   }
 
-  function handleSubmit(event: React.FormEvent): void {
-    event.preventDefault();
+  function computeFromForm(nextForm: FormState): void {
     setError(null);
-    setResult(null);
 
     try {
-      if (!isValidTimeZone(form.timeZone.trim())) {
-        throw new Error(`无法识别的时区：${form.timeZone}`);
+      if (!isValidTimeZone(nextForm.timeZone.trim())) {
+        throw new Error(`无法识别的时区：${nextForm.timeZone}`);
       }
-      const [year, month, day] = form.date.split('-').map(Number);
-      const [hour, minute] = form.time.split(':').map(Number);
+      const [year, month, day] = nextForm.date.split('-').map(Number);
+      const [hour, minute] = nextForm.time.split(':').map(Number);
       if (!year || !month || !day || Number.isNaN(hour) || Number.isNaN(minute)) {
         throw new Error('日期或时间格式不正确');
       }
 
-      const local = resolveLocalTime({ year, month, day, hour, minute, timeZone: form.timeZone.trim() });
+      const local = resolveLocalTime({
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        timeZone: nextForm.timeZone.trim(),
+      });
       const snapshot = computeSnapshot(local.utc, {
-        latitude: Number(form.latitude),
-        longitude: Number(form.longitude),
-        elevation: Number(form.elevation || 0),
+        latitude: Number(nextForm.latitude),
+        longitude: Number(nextForm.longitude),
+        elevation: Number(nextForm.elevation || 0),
       });
 
       setResult({
@@ -217,13 +268,90 @@ export default function App() {
       // 白昼用纸面、夜间用夜空，避免浅色圆盘压在深色页面上
       setTheme(snapshot.daylight ? 'paper' : 'night');
       setVariant(0);
+      setNightMinutes(null);
+      setPlaying(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   }
 
-  const bodies = result
-    ? [...result.snapshot.bodies].sort((a, b) => b.altitude - a.altitude)
+  function handleSubmit(event: React.FormEvent): void {
+    event.preventDefault();
+    computeFromForm(form);
+  }
+
+  /** 前一日 / 后一日：保持钟点不变，只移动日期。 */
+  function shiftDate(days: number): void {
+    const [year, month, day] = form.date.split('-').map(Number);
+    if (!year || !month || !day) return;
+
+    const shifted = new Date(Date.UTC(year, month - 1, day + days));
+    const nextDate = `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-${String(shifted.getUTCDate()).padStart(2, '0')}`;
+    const nextForm = { ...form, date: nextDate };
+
+    setForm(nextForm);
+    computeFromForm(nextForm);
+  }
+
+  const commitNight = useCallback(
+    (minutes: number) => {
+      if (!result || !nightWindow) return;
+      const instant = new Date(nightWindow.sunset.getTime() + minutes * 60000);
+      const timeZone = form.timeZone.trim();
+      const parts = localDateTimeOf(instant, timeZone);
+
+      setForm((previous) => ({ ...previous, date: parts.date, time: parts.time }));
+      setResult({
+        snapshot: computeSnapshot(instant, result.snapshot.geo),
+        offset: formatOffset(offsetSecondsAt(instant.getTime(), timeZone)),
+        skipped: false,
+        ambiguous: false,
+      });
+      setNightMinutes(null);
+      setPlaying(false);
+    },
+    [result, nightWindow, form.timeZone],
+  );
+
+  const togglePlay = useCallback(() => {
+    if (playing) {
+      commitNight(minutesRef.current);
+      return;
+    }
+    minutesRef.current = currentMinutes;
+    setNightMinutes(currentMinutes);
+    setPlaying(true);
+  }, [playing, commitNight, currentMinutes]);
+
+  // 播放：2× 时整夜约 9 秒，1× 约 18 秒，0.5× 约 36 秒
+  useEffect(() => {
+    if (!playing || !nightWindow) return;
+
+    let frame = 0;
+    let last = performance.now();
+    const rate = Math.max(1, (totalMinutes / 18) * speed);
+
+    const tick = (now: number) => {
+      const delta = Math.min(0.12, (now - last) / 1000);
+      last = now;
+
+      const next = Math.min(totalMinutes, minutesRef.current + delta * rate);
+      minutesRef.current = next;
+      setNightMinutes(next);
+
+      if (next >= totalMinutes) {
+        commitNight(totalMinutes);
+        return;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [playing, nightWindow, totalMinutes, commitNight, speed]);
+
+  const bodies = displaySnapshot
+    ? [...displaySnapshot.bodies].sort((a, b) => b.altitude - a.altitude)
     : [];
 
   return (
@@ -399,7 +527,7 @@ export default function App() {
 
       {error && <p className="error" role="alert">{error}</p>}
 
-      {result && (
+      {result && displaySnapshot && (
         <section className="result">
           {scene && (
             <>
@@ -416,6 +544,85 @@ export default function App() {
                 </button>
               </div>
             </>
+          )}
+
+          {nightWindow && (
+            <section className="night">
+              <div className="night-head">
+                <span className="option-label">这一夜</span>
+                <span className="night-window">
+                  {sunsetLocal?.date.slice(5)} {sunsetLocal?.label}
+                  {' — '}
+                  {sunriseLocal?.date.slice(5)} {sunriseLocal?.label}
+                </span>
+                <span className="night-now">{currentLocal?.label}</span>
+                <div className="segmented night-speed">
+                  {[0.5, 1, 2].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={speed === value ? 'is-active' : ''}
+                      onClick={() => setSpeed(value)}
+                      aria-label={`${value} 倍速`}
+                    >
+                      {value}×
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="night-play" onClick={togglePlay}>
+                  {playing ? '暂停' : '播放'}
+                </button>
+              </div>
+
+              <div className="night-slider">
+                <button
+                  type="button"
+                  className="night-day"
+                  onClick={() => shiftDate(-1)}
+                  aria-label="前一日"
+                  title="前一日"
+                >
+                  ‹
+                </button>
+
+                <input
+                  className="night-range"
+                  type="range"
+                  min={0}
+                  max={Math.round(totalMinutes)}
+                  step={1}
+                  value={Math.round(currentMinutes)}
+                  aria-label="这一夜的时间轴"
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    minutesRef.current = value;
+                    setNightMinutes(value);
+                  }}
+                  onPointerUp={() => commitNight(minutesRef.current)}
+                  onKeyUp={() => commitNight(minutesRef.current)}
+                />
+
+                <button
+                  type="button"
+                  className="night-day"
+                  onClick={() => shiftDate(1)}
+                  aria-label="后一日"
+                  title="后一日"
+                >
+                  ›
+                </button>
+              </div>
+
+              <div className="night-scale">
+                <span>日落</span>
+                <span>午夜</span>
+                <span>日出</span>
+              </div>
+
+              {nightMinutes !== null && (
+                <p className="night-hint">预览中 · 松开后应用，并重新生成文案</p>
+              )}
+            </section>
           )}
 
           {chartOpen && scene && (
@@ -461,40 +668,40 @@ export default function App() {
           <dl className="meta">
             <div>
               <dt>UTC</dt>
-              <dd>{result.snapshot.utc.replace('.000Z', 'Z')}</dd>
+              <dd>{displaySnapshot.utc.replace('.000Z', 'Z')}</dd>
             </div>
             <div>
               <dt>UTC 偏移</dt>
-              <dd>{result.offset}</dd>
+              <dd>{displayOffset}</dd>
             </div>
             <div>
               <dt>坐标</dt>
               <dd>
-                {result.snapshot.geo.latitude}°, {result.snapshot.geo.longitude}°
+                {displaySnapshot.geo.latitude}°, {displaySnapshot.geo.longitude}°
               </dd>
             </div>
             <div>
               <dt>天空</dt>
-              <dd>{result.snapshot.daylight ? '白昼' : '夜间'}</dd>
+              <dd>{displaySnapshot.daylight ? '白昼' : '夜间'}</dd>
             </div>
             <div>
               <dt>月相</dt>
               <dd>
-                {result.snapshot.moon.phaseName} · 照亮 {(result.snapshot.moon.illumination * 100).toFixed(1)}%
+                {displaySnapshot.moon.phaseName} · 照亮 {(displaySnapshot.moon.illumination * 100).toFixed(1)}%
               </dd>
             </div>
             <div>
               <dt>太阳高度</dt>
-              <dd>{formatAltitude(result.snapshot.sunAltitude)}</dd>
+              <dd>{formatAltitude(displaySnapshot.sunAltitude)}</dd>
             </div>
           </dl>
 
-          {result.skipped && (
+          {result.skipped && nightMinutes === null && (
             <p className="notice">
               这个本地时间在 {form.timeZone} 不存在（夏令时前拨），已顺延为 {result.snapshot.utc}。
             </p>
           )}
-          {result.ambiguous && (
+          {result.ambiguous && nightMinutes === null && (
             <p className="notice">
               这个本地时间在 {form.timeZone} 出现两次（夏令时回拨），此处取较早的一次。
             </p>
