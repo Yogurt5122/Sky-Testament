@@ -23,11 +23,24 @@ page.on('console', (message) => {
 page.on('pageerror', (error) => errors.push(String(error)));
 
 await page.goto(url, { waitUntil: 'networkidle' });
+if (process.env.SHOT_TIME) {
+  await page.locator('input[type="time"]').fill(process.env.SHOT_TIME);
+}
 await page.getByPlaceholder('上海 / Tokyo / New York').fill('成都');
 await page.getByRole('button', { name: /成都/ }).first().click();
 await page.getByRole('button', { name: '计算这一刻的天空' }).click();
 await page.waitForSelector('table');
-await page.screenshot({ path: out, fullPage: true });
+if (process.env.SHOT_MODAL) {
+  await page.locator('.chart-trigger').click();
+  await page.waitForSelector('.chart-modal');
+  const zoomTimes = Number(process.env.SHOT_ZOOM ?? 0);
+  const zoomIn = page.locator('.chart-modal-controls button[aria-label="放大"]');
+  for (let index = 0; index < zoomTimes; index += 1) {
+    await zoomIn.click();
+  }
+  await page.waitForTimeout(500);
+}
+await page.screenshot({ path: out, fullPage: !process.env.SHOT_MODAL });
 
 console.log(`screenshot -> ${out}`);
 if (errors.length > 0) {

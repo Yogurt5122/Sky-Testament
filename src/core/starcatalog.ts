@@ -113,16 +113,29 @@ export function starHorizontal(
   utc: Date,
   geo: GeoPoint,
 ): HorizontalPosition {
+  return createStarProjector(utc, geo)(star.ra, star.dec);
+}
+
+/**
+ * 批量转换用的投影器：时间、观测者与旋转矩阵只算一次。
+ *
+ * 渲染整片星空时逐星创建 Observer / AstroTime 会慢一个数量级，
+ * 因此把公共部分提到外面。
+ */
+export function createStarProjector(
+  utc: Date,
+  geo: GeoPoint,
+): (ra: number, dec: number) => HorizontalPosition {
   const observer = new Astronomy.Observer(geo.latitude, geo.longitude, geo.elevation);
   const time = Astronomy.MakeTime(utc);
+  const rotation = Astronomy.Rotation_EQJ_HOR(time, observer);
 
-  // 赤经以小时为单位，Spherical 的 lon 用度
-  const equatorial = Astronomy.VectorFromSphere(new Astronomy.Spherical(star.dec, star.ra * 15, 1), time);
-  const horizontalVector = Astronomy.RotateVector(
-    Astronomy.Rotation_EQJ_HOR(time, observer),
-    equatorial,
-  );
-  const horizontal = Astronomy.HorizonFromVector(horizontalVector, 'normal');
-
-  return { altitude: horizontal.lat, azimuth: horizontal.lon };
+  return (ra: number, dec: number) => {
+    const vector = Astronomy.VectorFromSphere(new Astronomy.Spherical(dec, ra * 15, 1), time);
+    const horizontal = Astronomy.HorizonFromVector(
+      Astronomy.RotateVector(rotation, vector),
+      'normal',
+    );
+    return { altitude: horizontal.lat, azimuth: horizontal.lon };
+  };
 }

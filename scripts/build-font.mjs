@@ -15,7 +15,7 @@ import subsetFont from 'subset-font';
 
 const SOURCE_FONT = 'data-raw/NotoSerifSC.ttf';
 const OUT_DIR = 'public/fonts';
-const ROOTS = ['src', 'index.html', 'data/zh-overrides.json'];
+const ROOTS = ['src', 'index.html', 'data/zh-overrides.json', 'public/data/cities.json'];
 const EXTENSIONS = new Set(['.ts', '.tsx', '.css', '.json', '.html']);
 
 const PUNCTUATION = '，。、；：？！「」『』（）〔〕【】《》〈〉—…·～￥％＃＠＆＊＋－＝｜＼／';

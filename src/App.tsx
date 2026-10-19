@@ -1,7 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { parseCityDatabase, searchCities, type City } from './core/cities';
 import { computeSnapshot, type SkySnapshot } from './core/ephemeris';
+import { parseStarCatalog, type Star } from './core/starcatalog';
 import { formatOffset, isValidTimeZone, resolveLocalTime } from './core/time';
+import { Chart } from './render/Chart';
+import { ChartModal } from './render/ChartModal';
+import { buildChartScene } from './render/scene';
+import starNamesZh from './data/star-names-zh.json';
+
+const NAME_ZH = starNamesZh as Record<string, string>;
+
+interface StarNameFile {
+  [hip: string]: { n?: string };
+}
+
+function buildNameMap(raw: StarNameFile): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const [hip, entry] of Object.entries(raw)) {
+    if (!entry.n) continue;
+    const chinese = NAME_ZH[entry.n];
+    if (!chinese) continue;
+    map.set(Number(hip), chinese);
+  }
+  return map;
+}
 
 interface FormState {
   date: string;
@@ -47,9 +69,13 @@ function formatMagnitude(value: number | null): string {
 export default function App() {
   const [form, setForm] = useState<FormState>(DEFAULTS);
   const [cities, setCities] = useState<City[]>([]);
+  const [stars, setStars] = useState<Star[]>([]);
+  const [starNames, setStarNames] = useState<Map<number, string>>(new Map());
   const [cityQuery, setCityQuery] = useState('');
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [chartOpen, setChartOpen] = useState(false);
+  const [selectedCity, setSelectedCity] = useState<City | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +95,40 @@ export default function App() {
     };
   }, []);
 
-  const matches = cityQuery.trim() && cities.length > 0 ? searchCities(cities, cityQuery, 6) : [];
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetch('/data/stars.bin').then((response) => {
+        if (!response.ok) throw new Error(`星表加载失败: ${response.status}`);
+        return response.arrayBuffer();
+      }),
+      fetch('/data/star-names.json').then((response) => {
+        if (!response.ok) throw new Error(`星名加载失败: ${response.status}`);
+        return response.json() as Promise<StarNameFile>;
+      }),
+    ])
+      .then(([buffer, names]) => {
+        if (cancelled) return;
+        setStars(parseStarCatalog(buffer));
+        setStarNames(buildNameMap(names));
+      })
+      .catch(() => {
+        if (!cancelled) setStars([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedLabel = selectedCity ? (selectedCity.zh ?? selectedCity.name) : '';
+  const showMatches =
+    cityQuery.trim().length > 0 && cities.length > 0 && cityQuery.trim() !== selectedLabel;
+  const matches = showMatches ? searchCities(cities, cityQuery, 6) : [];
+
+  const scene = useMemo(() => {
+    if (!result || stars.length === 0) return null;
+    return buildChartScene(result.snapshot, stars, starNames);
+  }, [result, stars, starNames]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -82,7 +141,8 @@ export default function App() {
       latitude: city.latitude.toFixed(4),
       longitude: city.longitude.toFixed(4),
     }));
-    setCityQuery('');
+    setSelectedCity(city);
+    setCityQuery(city.zh ?? city.name);
   }
 
   function handleSubmit(event: React.FormEvent): void {
@@ -125,10 +185,10 @@ export default function App() {
   return (
     <main className="page">
       <header className="masthead">
-        <p className="kicker">M2 · 数据层</p>
+        <p className="kicker">M3 · 星图</p>
         <h1>天穹遗嘱</h1>
         <p className="lede">
-          输入一个时刻与地点，查看那一刻真实可见的天空。这是计算核心的验证界面，星图将在后续里程碑加入。
+          输入一个时刻与地点，还原那一刻真实可见的天空。球极投影，天顶居中，地平线为外圈。
         </p>
       </header>
 
@@ -139,11 +199,24 @@ export default function App() {
             <input
               type="text"
               value={cityQuery}
-              onChange={(event) => setCityQuery(event.target.value)}
+              onChange={(event) => {
+                setCityQuery(event.target.value);
+                if (selectedCity && event.target.value.trim() !== selectedLabel) {
+                  setSelectedCity(null);
+                }
+              }}
               placeholder="上海 / Tokyo / New York"
               spellCheck={false}
             />
           </label>
+          {selectedCity && (
+            <p className="city-selected">
+              已选择 {selectedCity.zh ?? selectedCity.name}
+              <span>
+                {selectedCity.name} · {selectedCity.timezone}
+              </span>
+            </p>
+          )}
           {matches.length > 0 && (
             <ul className="city-results">
               {matches.map((city) => (
@@ -214,6 +287,27 @@ export default function App() {
 
       {result && (
         <section className="result">
+          {scene && (
+            <>
+              <figure className="chart-figure">
+                <Chart scene={scene} />
+                <figcaption>
+                  {scene.daylight ? '白昼的天空 · ' : ''}
+                  可见恒星 {scene.starCount} 颗 · 球极投影 · 天顶居中
+                </figcaption>
+              </figure>
+              <div className="chart-actions">
+                <button type="button" className="chart-trigger" onClick={() => setChartOpen(true)}>
+                  查看星图
+                </button>
+              </div>
+            </>
+          )}
+
+          {chartOpen && scene && (
+            <ChartModal scene={scene} onClose={() => setChartOpen(false)} />
+          )}
+
           <dl className="meta">
             <div>
               <dt>UTC</dt>

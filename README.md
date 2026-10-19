@@ -4,7 +4,7 @@
 
 Sky Testament 是一个**天文记录生成器**。输入一个真实的时刻与地点，它还原那一刻真实可见的天空，并写下一段克制的文字作为注脚。它不预测命运，只记录天空。
 
-**状态**：MVP 开发中 · M2（数据层）已完成
+**状态**：MVP 开发中 · M3（星图）已完成
 
 ---
 
@@ -30,7 +30,7 @@ Sky Testament 是一个**天文记录生成器**。输入一个真实的时刻�
 | 功能 | MVP | V1 |
 |---|:--:|:--:|
 | 日期时间输入 + 离线城市搜索（含中文名） | ● | ● |
-| 可见半球星图：恒星 mag ≤ 6.5、日月行星、星座连线 | ● | ● |
+| 可见半球星图：8,920 颗恒星中地平线以上部分、日月行星、星座连线 | ● | ● |
 | 白天模式（太阳在地平线上时不产生空图） | ● | ● |
 | 确定性文案（1 种风格） | ● | 3 种 |
 | 导出 SVG / PNG / A3 打印 PDF | ● | ● |
@@ -67,7 +67,7 @@ Browser (SPA，无后端)
 | 后端 | 不做 | 计算、渲染、导出、分享全部在客户端完成 |
 | 天文库 | astronomy-engine (MIT) | 标称 ±1′，与 JPL Horizons 交叉验证，无 DOM 依赖 |
 | 时区 | **种子锚定 UTC 时刻**，而非本地时间 | 绕开浏览器 tzdata 差异，跨端可复现；本地→UTC 结果展示在元数据中并允许手动覆盖 |
-| 投影 | 球极（stereographic） | 保角，星座可辨识；方位等距在地平线附近形变过大 |
+| 投影 | 球极（stereographic） | 保角，星座在地平线附近仍可辨认；全屏缩放通过 viewBox 裁剪实现，矢量始终按屏幕分辨率重绘 |
 | 星表 | HYG v4.2 过滤 mag ≤ 6.5 | 单文件、含自行与星名；CC BY-SA 4.0，独立目录 + 署名 |
 | 文案 | 模板 + 语料 + 确定性 PRNG | 不用 LLM：零成本、零延迟、零隐私风险、可复现 |
 | 导出 | MVP 用浏览器打印，V1 上 pdf-lib | Chrome 打印保留矢量并嵌入字体子集，A3 已验证 |
@@ -135,8 +135,8 @@ npm run shot     # Playwright 截图（channel: chrome，不下载内核）
 数据管道（原始数据放在 `data-raw/`，不提交）：
 
 ```bash
-npm run build:stars    # HYG v4.2 → src/data/stars.bin + star-names.json
-npm run build:cities   # GeoNames cities15000 → src/data/cities.json
+npm run build:stars    # HYG v4.2 → public/data/stars.bin + star-names.json
+npm run build:cities   # GeoNames cities15000 → public/data/cities.json
 npm run build:font     # Noto Serif SC → public/fonts/*.woff2
 ```
 
@@ -146,9 +146,10 @@ npm run build:font     # Noto Serif SC → public/fonts/*.woff2
 已完成：
 
 - **M1 天文核心** —— `src/core/time.ts` 本地时间 → UTC，覆盖夏令时前拨与回拨；`src/core/ephemeris.ts` 太阳、月亮、五大行星的赤道与地平坐标；4 个天体对照 Horizons，最大偏差 0.33′
-- **M2 数据层** —— 恒星目录 8,920 颗（mag ≤ 6.5，含自行与 B−V）、城市库 6,285 座（3,588 座带中文名）、字体子集 1,686 字；城市搜索可直接回填时区与经纬度
+- **M2 数据层** —— 恒星目录 8,920 颗（mag ≤ 6.5，含自行与 B−V）、城市库 6,285 座（3,588 座带中文名）、字体子集 1,758 字；城市搜索可直接回填时区与经纬度
+- **M3 星图** —— 球极投影的可见半球、星等分五档合并为 path、七座星座连线（自绘）、亮星与行星标签避让、地平圈与方位刻度、白天模式；点「查看星图」进入全屏，拖动平移、滚轮或双指缩放（最高 14 倍）；缩放改的是 SVG viewBox 而非 CSS transform，因此任意倍率都是矢量重绘，标签字号与描边保持屏幕尺寸不变
 
-测试共 35 个。
+测试共 48 个。
 
 ## 参与
 
