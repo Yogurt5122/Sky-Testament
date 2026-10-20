@@ -223,8 +223,10 @@ export default function App() {
     return buildChartScene(displaySnapshot, stars, starNames, {
       limitingMagnitude: qualityOption.limit,
       detail,
+      // 放大时标记只按 sqrt(zoom) 缓慢变大，而不是跟着线性放大
+      sizeScale: 1 / Math.sqrt(skyView.zoom),
     });
-  }, [displaySnapshot, stars, starNames, qualityOption.limit, detail]);
+  }, [displaySnapshot, stars, starNames, qualityOption.limit, detail, skyView.zoom]);
 
   // 文案只认已提交的时刻：拖动预览时文字保持不动，松手后才重算
   const committedScene = useMemo(() => {

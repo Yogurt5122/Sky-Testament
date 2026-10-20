@@ -68,6 +68,25 @@ interface ChartProps {
   interactive?: boolean;
 }
 
+/** 越亮的行星泛光越大，避免金星和海王星看起来一样 */
+function planetGlowScale(magnitude: number | null): number {
+  if (magnitude === null) return 4;
+  if (magnitude < -1) return 5.6;
+  if (magnitude < 1) return 4.6;
+  if (magnitude < 3) return 3.8;
+  if (magnitude < 5) return 3.0;
+  return 2.4;
+}
+
+/** 按天体 id 生成一个稳定的偏转角，避免所有星芒同向 */
+function spikeAngle(id: string): number {
+  let hash = 0;
+  for (let index = 0; index < id.length; index += 1) {
+    hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
+  }
+  return (hash % 900) / 10;
+}
+
 const CARDINALS = [
   { azimuth: 0, label: 'N' },
   { azimuth: 90, label: 'E' },
@@ -267,6 +286,13 @@ export function Chart({
         <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
           <circle cx={center} cy={center} r={radius} />
         </clipPath>
+        {scene.planets.map((planet) => (
+          <radialGradient key={planet.id} id={`${clipId}-glow-${planet.id}`}>
+            <stop offset="0%" stopColor={planet.color} stopOpacity={0.7} />
+            <stop offset="38%" stopColor={planet.color} stopOpacity={0.24} />
+            <stop offset="100%" stopColor={planet.color} stopOpacity={0} />
+          </radialGradient>
+        ))}
       </defs>
 
       <circle className="chart-disc" cx={center} cy={center} r={radius} />
@@ -376,12 +402,53 @@ export function Chart({
       </g>
 
       <g className="chart-planets">
-        {scene.planets.map((planet) => (
-          <g key={planet.name}>
-            <circle cx={planet.x} cy={planet.y} r={planet.r + 2.5} className="chart-planet-halo" />
-            <circle cx={planet.x} cy={planet.y} r={planet.r} className="chart-planet" />
-          </g>
-        ))}
+        {scene.planets.map((planet) => {
+          const glowRadius = planet.r * planetGlowScale(planet.magnitude);
+          const spikeLength = glowRadius * 1.35;
+          return (
+            <g key={planet.id}>
+              {/* 星芒画在光晕下层：中心被光晕盖住，只露出细尖 */}
+              <g
+                transform={`translate(${planet.x} ${planet.y}) rotate(${spikeAngle(planet.id)})`}
+              >
+                <line
+                  x1={-spikeLength}
+                  y1={0}
+                  x2={spikeLength}
+                  y2={0}
+                  stroke={planet.color}
+                  strokeWidth={0.55}
+                  strokeLinecap="round"
+                  opacity={0.24}
+                />
+                <line
+                  x1={0}
+                  y1={-spikeLength}
+                  x2={0}
+                  y2={spikeLength}
+                  stroke={planet.color}
+                  strokeWidth={0.55}
+                  strokeLinecap="round"
+                  opacity={0.24}
+                />
+              </g>
+              <circle
+                cx={planet.x}
+                cy={planet.y}
+                r={glowRadius}
+                fill={`url(#${clipId}-glow-${planet.id})`}
+              />
+              <circle cx={planet.x} cy={planet.y} r={planet.r} fill={planet.color} />
+              <circle
+                cx={planet.x}
+                cy={planet.y}
+                r={planet.r * 0.36}
+                fill="#fffdf5"
+                opacity={0.9}
+              />
+            </g>
+          );
+        })}
       </g>
 
       {scene.moon && (
@@ -434,7 +501,7 @@ export function Chart({
           className="chart-selected"
           cx={selectedObject.x}
           cy={selectedObject.y}
-          r={13}
+          r={13 * contentLabelScale}
         />
       )}
 

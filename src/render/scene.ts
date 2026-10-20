@@ -25,12 +25,28 @@ export interface StarBucket {
 }
 
 export interface PlanetDot {
+  /** 星历层的天体 id，例如 jupiter */
+  id: string;
   x: number;
   y: number;
   r: number;
   name: string;
   magnitude: number | null;
+  /** 行星自身的色调，用于泛光 */
+  color: string;
 }
+
+/** 行星色调：偏真实，同时保证在深色底上可读 */
+const PLANET_COLORS: Record<string, string> = {
+  sun: '#f7e7b8',
+  mercury: '#cfc7b6',
+  venus: '#f4e8c6',
+  mars: '#e08a63',
+  jupiter: '#e9d6ac',
+  saturn: '#e8d18f',
+  uranus: '#b6e0e2',
+  neptune: '#a8c4f0',
+};
 
 export interface MoonDisc {
   x: number;
@@ -92,6 +108,11 @@ export interface BuildSceneOptions {
   limitingMagnitude?: number;
   /** 信息密度 */
   detail?: DetailLevel;
+  /**
+   * 标记尺寸系数：外层若按 zoom 放大，传入 1/zoom 可让星点、
+   * 行星与月亮保持屏幕尺寸不变（真实天空里它们仍是点）。
+   */
+  sizeScale?: number;
 }
 
 /** 星等分桶：半径按印刷观感设定，单位为 viewBox 单位。 */
@@ -172,6 +193,7 @@ export function buildChartScene(
 ): ChartScene {
   const size = options.size ?? 1000;
   const margin = options.margin ?? 64;
+  const sizeScale = options.sizeScale ?? 1;
   const radius = size / 2 - margin;
   const center = size / 2;
   const detail = options.detail ?? 'standard';
@@ -208,7 +230,9 @@ export function buildChartScene(
     const bucketIndex = index === -1 ? BUCKETS.length - 1 : index;
     const bin = colorBinOf(star.ci);
 
-    bucketPaths[bucketIndex][bin].push(circlePath(x, y, BUCKETS[bucketIndex].radius));
+    bucketPaths[bucketIndex][bin].push(
+      circlePath(x, y, BUCKETS[bucketIndex].radius * sizeScale),
+    );
     bucketCounts[bucketIndex][bin] += 1;
     starCount += 1;
 
@@ -305,7 +329,7 @@ export function buildChartScene(
       moon = {
         x,
         y,
-        r: 9,
+        r: 9 * sizeScale,
         illumination: snapshot.moon.illumination,
         waxing: snapshot.moon.phaseDegrees < 180,
         phaseName: snapshot.moon.phaseName,
@@ -336,7 +360,15 @@ export function buildChartScene(
     const dotRadius =
       body.id === 'sun' ? 9 : magnitude < 0 ? 5 : magnitude < 1 ? 4.2 : magnitude < 2.5 ? 3.4 : 2.8;
 
-    planets.push({ x, y, r: dotRadius, name: body.name, magnitude: body.magnitude });
+    planets.push({
+      id: body.id,
+      x,
+      y,
+      r: dotRadius * sizeScale,
+      name: body.name,
+      magnitude: body.magnitude,
+      color: PLANET_COLORS[body.id] ?? '#e9e3d5',
+    });
     objects.push({
       id: `body-${body.id}`,
       kind: 'planet',
