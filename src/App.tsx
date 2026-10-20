@@ -122,6 +122,7 @@ export default function App() {
   const [liveOn, setLiveOn] = useState(false);
   const [liveSnapshot, setLiveSnapshot] = useState<SkySnapshot | null>(null);
   const liveDaylight = useRef<boolean | null>(null);
+  const livePrevTheme = useRef<Theme>('night');
   const minutesRef = useRef(0);
 
   const qualityOption = SKY_QUALITY.find((option) => option.id === quality) ?? SKY_QUALITY[1];
@@ -476,24 +477,11 @@ export default function App() {
     computeFromForm(nextForm);
   }
 
-  /** 停止实时：把当前时刻写回表单，文案按这一刻重新生成。 */
+  /** 停止实时：回到进入实时前的时刻，不把实时时间写回表单。 */
   function stopLive(): void {
     if (!liveOn) return;
 
-    const snapshot = liveSnapshot;
-    if (snapshot) {
-      const instant = new Date(snapshot.utc);
-      const timeZone = form.timeZone.trim();
-      const parts = localDateTimeOf(instant, timeZone);
-      setForm((previous) => ({ ...previous, date: parts.date, time: parts.time }));
-      setResult({
-        snapshot,
-        offset: formatOffset(offsetSecondsAt(instant.getTime(), timeZone)),
-        skipped: false,
-        ambiguous: false,
-      });
-    }
-
+    setTheme(livePrevTheme.current);
     setLiveOn(false);
     setLiveSnapshot(null);
     liveDaylight.current = null;
@@ -511,6 +499,7 @@ export default function App() {
     setPlaying(false);
     setSelectedId(null);
 
+    livePrevTheme.current = theme;
     const snapshot = computeSnapshot(new Date(), result.snapshot.geo);
     liveDaylight.current = snapshot.daylight;
     setTheme(snapshot.daylight ? 'paper' : 'night');
@@ -939,7 +928,7 @@ export default function App() {
             {liveOn && (
               <p className="stage-live-status">
                 <span className="stage-live-dot" />
-                实时 · 每秒刷新 · 停止后按此刻生成文案
+                实时 · 每秒刷新 · 停止后回到进入实时前的时刻
               </p>
             )}
 
