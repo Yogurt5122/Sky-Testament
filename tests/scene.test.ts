@@ -15,9 +15,20 @@ describe('buildChartScene', () => {
   const night = computeSnapshot(new Date('2026-10-19T12:00:00Z'), SHANGHAI);
   const scene = buildChartScene(night, stars, names);
 
-  it('夜间可见数千颗恒星', () => {
-    expect(scene.starCount).toBeGreaterThan(3000);
+  it('夜间可见数千颗恒星（已按大气消光衰减）', () => {
+    // 6.5 等极限下原为 3000+，靠近地平线的星被消光压暗后剩下约 2900
+    expect(scene.starCount).toBeGreaterThan(2500);
     expect(scene.starCount).toBeLessThan(6000);
+  });
+
+  it('星密度柔光只出现在有星的区域', () => {
+    expect(scene.density.length).toBeGreaterThan(0);
+    for (const cell of scene.density) {
+      expect(cell.opacity).toBeGreaterThan(0);
+      expect(cell.opacity).toBeLessThanOrEqual(1);
+      expect(cell.x).toBeGreaterThan(0);
+      expect(cell.y).toBeGreaterThan(0);
+    }
   });
 
   it('每个星等分桶都有路径数据', () => {

@@ -24,6 +24,7 @@
   --sky-center: #fbf7ef;
   --sky-mid: #f5efe3;
   --sky-edge: #e6dbc7;
+  --density-color: #b9ab90;
   --mono: 'IBM Plex Mono', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
   --serif: 'Sky Serif', 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
   color-scheme: light;
@@ -39,6 +40,7 @@ body.theme-night {
   --sky-center: #04060a;
   --sky-mid: #0a0e15;
   --sky-edge: #1b1d22;
+  --density-color: #b9c6de;
   color-scheme: dark;
 }
 
@@ -88,6 +90,10 @@ body.theme-night .chart-stars .star-halo {
   stroke: var(--ink);
   stroke-width: 0.8;
   stroke-linecap: round;
+}
+
+.chart-density circle {
+  fill: var(--density-color);
 }
 
 .chart-star-aura-center {

@@ -91,6 +91,14 @@ export interface BrightStar {
   angle: number;
 }
 
+/** 星密度柔光：银河带一类的高密度区域 */
+export interface DensityCell {
+  x: number;
+  y: number;
+  r: number;
+  opacity: number;
+}
+
 export interface ChartScene {
   size: number;
   center: number;
@@ -99,6 +107,7 @@ export interface ChartScene {
   detail: DetailLevel;
   buckets: StarBucket[];
   brightStars: BrightStar[];
+  density: DensityCell[];
   planets: PlanetDot[];
   moon: MoonDisc | null;
   constellations: ConstellationFigurePath[];
@@ -136,6 +145,19 @@ function hashAngle(seed: number): number {
   hash ^= hash >>> 15;
   return (hash % 900) / 10;
 }
+
+/** Kasten–Young 大气质量，高度角单位：度 */
+function airmassAt(altitude: number): number {
+  const alt = Math.max(altitude, 1);
+  return 1 / (Math.sin((alt * Math.PI) / 180) + 0.15 * Math.pow(alt + 3.885, -1.253));
+}
+
+/** 消光系数：每增加一个大气质量，星等暗多少 */
+const EXTINCTION_K = 0.22;
+/** 每增加一个大气质量，B−V 偏红多少 */
+const REDDENING_BV = 0.1;
+/** 星密度网格：用于银河带一类的高密度区柔光 */
+const DENSITY_GRID = 26;
 
 /** 星等分桶：半径按印刷观感设定，单位为 viewBox 单位。 */
 const BUCKETS = [
@@ -232,6 +254,7 @@ export function buildChartScene(
   );
   const bucketCounts = BUCKETS.map(() => Array.from({ length: COLOR_BIN_COUNT }, () => 0));
   const brightStars: BrightStar[] = [];
+  const density = new Float32Array(DENSITY_GRID * DENSITY_GRID);
   const labelCandidates: Array<{ x: number; y: number; mag: number; text: string }> = [];
   const objects: SceneObject[] = [];
   let starCount = 0;
@@ -249,15 +272,29 @@ export function buildChartScene(
     const x = center + point.x;
     const y = center + point.y;
 
-    const index = BUCKETS.findIndex((bucket) => star.mag <= bucket.limit);
+    // 大气消光：越靠近地平线越暗、越红
+    const airmass = airmassAt(horizontal.altitude);
+    const apparentMag = star.mag + EXTINCTION_K * (airmass - 1);
+    if (apparentMag > limitingMagnitude) continue;
+
+    const index = BUCKETS.findIndex((bucket) => apparentMag <= bucket.limit);
     const bucketIndex = index === -1 ? BUCKETS.length - 1 : index;
-    const bin = colorBinOf(star.ci);
+    const bin = colorBinOf(star.ci + REDDENING_BV * (airmass - 1));
 
     bucketPaths[bucketIndex][bin].push(
       circlePath(x, y, BUCKETS[bucketIndex].radius * sizeScale),
     );
     bucketCounts[bucketIndex][bin] += 1;
     starCount += 1;
+
+    // 星密度：亮星权重更高，供银河带柔光使用
+    if (horizontal.altitude > 0) {
+      const gridX = Math.floor(((x - (center - radius)) / (2 * radius)) * DENSITY_GRID);
+      const gridY = Math.floor(((y - (center - radius)) / (2 * radius)) * DENSITY_GRID);
+      if (gridX >= 0 && gridX < DENSITY_GRID && gridY >= 0 && gridY < DENSITY_GRID) {
+        density[gridY * DENSITY_GRID + gridX] += Math.max(0.15, 0.4 + (apparentMag - 1) * 0.3);
+      }
+    }
 
     const name = names.get(star.hip);
     if (star.mag <= 4.0) {
@@ -272,14 +309,14 @@ export function buildChartScene(
       });
     }
 
-    if (star.mag <= 2.2 && horizontal.altitude > 5) {
+    if (apparentMag <= 2.2 && horizontal.altitude > 5) {
       // 亮星单独画星芒：越亮越长，角度按 hip 稳定偏转
       brightStars.push({
         hip: star.hip,
         x,
         y,
-        mag: star.mag,
-        spike: Math.max(6.5, 13.5 - star.mag * 2.2) * sizeScale,
+        mag: apparentMag,
+        spike: Math.max(6.5, 13.5 - apparentMag * 2.2) * sizeScale,
         angle: hashAngle(star.hip),
       });
     }
@@ -307,6 +344,31 @@ export function buildChartScene(
       });
     }
   });
+
+  // 星密度高的区域（银河带）压成少量柔光点，交给一层模糊去铺开
+  const cellSize = (2 * radius) / DENSITY_GRID;
+  let maxDensity = 0;
+  for (const value of density) maxDensity = Math.max(maxDensity, value);
+
+  const densityCells: DensityCell[] = [];
+  if (maxDensity > 0) {
+    for (let gy = 0; gy < DENSITY_GRID; gy += 1) {
+      for (let gx = 0; gx < DENSITY_GRID; gx += 1) {
+        const value = density[gy * DENSITY_GRID + gx];
+        if (value <= 0) continue;
+        const normalized = value / maxDensity;
+        if (normalized < 0.4) continue;
+        densityCells.push({
+          x: center - radius + (gx + 0.5) * cellSize,
+          y: center - radius + (gy + 0.5) * cellSize,
+          r: cellSize * 2.1,
+          opacity: normalized,
+        });
+      }
+    }
+    densityCells.sort((a, b) => b.opacity - a.opacity);
+    densityCells.length = Math.min(densityCells.length, 180);
+  }
 
   // 图谱档：黄道与天赤道，以及它们各自的标注锚点
   let ecliptic = '';
@@ -526,6 +588,7 @@ export function buildChartScene(
     detail,
     buckets,
     brightStars,
+    density: densityCells,
     planets,
     moon,
     constellations,

@@ -308,6 +308,9 @@ export function Chart({
         <filter id={`${clipId}-star-glow`} x="-30%" y="-30%" width="160%" height="160%">
           <feGaussianBlur stdDeviation="1.2" />
         </filter>
+        <filter id={`${clipId}-density-glow`} x="-10%" y="-10%" width="120%" height="120%">
+          <feGaussianBlur stdDeviation="11" />
+        </filter>
         <radialGradient id={`${clipId}-star-aura`}>
           <stop offset="0%" className="chart-star-aura-center" />
           <stop offset="100%" className="chart-star-aura-edge" />
@@ -363,6 +366,20 @@ export function Chart({
       {/* 内容层：缩放平移，但被地平圈裁掉，外圈始终不动 */}
       <g clipPath={`url(#${clipId})`}>
         <g transform={contentTransform}>
+        {/* 星密度柔光：银河带一类的高密度区 */}
+        {scene.density.length > 0 && (
+          <g className="chart-density" filter={`url(#${clipId}-density-glow)`}>
+            {scene.density.map((cell, index) => (
+              <circle
+                key={index}
+                cx={cell.x}
+                cy={cell.y}
+                r={cell.r}
+                opacity={cell.opacity * 0.025}
+              />
+            ))}
+          </g>
+        )}
         {!minimal &&
           [30, 60].map((altitude) => (
             <circle
