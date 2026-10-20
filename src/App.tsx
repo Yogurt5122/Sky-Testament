@@ -12,6 +12,8 @@ import { generateEpitaph, type TextStyle } from './core/text/epitaph';
 import { findNightEvents } from './core/events';
 import { bodyDetails, starDetails } from './core/details';
 import { ObjectPanel } from './render/ObjectPanel';
+import ShareCard from './render/ShareCard';
+import { inlineComputedStyles } from './render/flatten';
 import { starSubtitle, starTitle, type StarDesignation } from './core/star-names';
 import starNamesZh from './data/star-names-zh.json';
 
@@ -104,6 +106,10 @@ export default function App() {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chartOpen, setChartOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const shareCardRef = useRef<HTMLDivElement | null>(null);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [theme, setTheme] = useState<Theme>('night');
   const [quality, setQuality] = useState<QualityId>('suburb');
@@ -134,7 +140,7 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/data/cities.json')
+    fetch(`${import.meta.env.BASE_URL}data/cities.json`)
       .then((response) => {
         if (!response.ok) throw new Error(`城市库加载失败: ${response.status}`);
         return response.json();
@@ -153,11 +159,11 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch('/data/stars.bin').then((response) => {
+      fetch(`${import.meta.env.BASE_URL}data/stars.bin`).then((response) => {
         if (!response.ok) throw new Error(`星表加载失败: ${response.status}`);
         return response.arrayBuffer();
       }),
-      fetch('/data/star-names.json').then((response) => {
+      fetch(`${import.meta.env.BASE_URL}data/star-names.json`).then((response) => {
         if (!response.ok) throw new Error(`星名加载失败: ${response.status}`);
         return response.json() as Promise<StarNameFile>;
       }),
@@ -485,6 +491,31 @@ export default function App() {
     setLiveOn(false);
     setLiveSnapshot(null);
     liveDaylight.current = null;
+  }
+
+  /** 把分享卡片按 1:1 栅格化成 PNG 下载 */
+  async function downloadShareCard(): Promise<void> {
+    const node = shareCardRef.current;
+    if (!node || shareBusy) return;
+
+    setShareBusy(true);
+    setShareError(null);
+    const restore = inlineComputedStyles(node);
+    try {
+      await document.fonts.ready;
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(node, { pixelRatio: 1, cacheBust: true });
+      const link = document.createElement('a');
+      const stamp = (currentLocal?.date ?? form.date).replace(/-/g, '');
+      link.download = `sky-testament-${stamp}-${form.time.replace(':', '')}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch {
+      setShareError('图片生成失败，请重试');
+    } finally {
+      restore();
+      setShareBusy(false);
+    }
   }
 
   function toggleLive(): void {
@@ -875,6 +906,14 @@ export default function App() {
                   <button type="button" className="chart-trigger" onClick={() => setChartOpen(true)}>
                     全屏星空
                   </button>
+                  <button
+                    type="button"
+                    className="chart-trigger"
+                    onClick={() => setShareOpen(true)}
+                    disabled={!scene || !epitaph}
+                  >
+                    分享卡片
+                  </button>
                   {skyView.zoom > 1 && (
                     <button
                       type="button"
@@ -1116,6 +1155,47 @@ export default function App() {
               details={details}
               onClearSelection={() => setSelectedId(null)}
             />
+          )}
+
+          {shareOpen && scene && epitaph && displaySnapshot && (
+            <div
+              className="share-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="分享卡片"
+              onClick={() => setShareOpen(false)}
+            >
+              <div className="share-modal__panel" onClick={(event) => event.stopPropagation()}>
+                <div className="share-modal__viewport">
+                  <div className="share-modal__scale">
+                    <div ref={shareCardRef}>
+                      <ShareCard
+                        city={selectedCity ? (selectedCity.zh ?? selectedCity.name) : '此刻'}
+                        date={currentLocal?.date ?? form.date}
+                        time={currentLocal?.label ?? form.time}
+                        latitude={displaySnapshot.geo.latitude}
+                        longitude={displaySnapshot.geo.longitude}
+                        text={epitaph.text}
+                        seed={epitaph.seed}
+                        scene={scene}
+                        starCount={scene.starCount}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {shareError && <p className="share-modal__error">{shareError}</p>}
+
+                <div className="share-modal__actions">
+                  <button type="button" onClick={downloadShareCard} disabled={shareBusy}>
+                    {shareBusy ? '正在生成…' : '下载 PNG'}
+                  </button>
+                  <button type="button" onClick={() => setShareOpen(false)}>
+                    关闭
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </section>
           ) : null}

@@ -4,7 +4,9 @@
 
 Sky Testament 是一个**天文记录生成器**。输入一个真实的时刻与地点，它还原那一刻真实可见的天空，并写下一段克制的文字作为注脚。它不预测命运，只记录天空。
 
-**状态**：M6 开发中 · v0.6.5（闪烁与倍速）已完成
+**状态**：M6 开发中 · v0.7.0（分享卡片与线上部署）已完成
+
+**在线预览**：https://yogurt5122.github.io/Sky-Testament/
 
 ---
 
@@ -35,6 +37,7 @@ Sky Testament 是一个**天文记录生成器**。输入一个真实的时刻�
 | 三档信息密度：纯净（只看星）/ 标准 / 图谱（黄道、天赤道、高度环标注、行星星等） | ● | ● |
 | 恒星按 B−V 着色、月球按真实相位绘制 | ● | ● |
 | 白天模式（太阳在地平线上时不产生空图） | ● | ● |
+| 分享卡片：1080×1350 PNG，星图 + 文案 + 种子 | ● | ● |
 | 确定性文案：古典 / 现代两种风格，种子可复现 | ● | 加英文，共 3 种 |
 | 「这一夜」时间轴：日落到日出拖动预览，可播放（1× / 800× / 1600× / 3200× / 6400×，默认 1600×） | ● | ● |
 | 点击天体查看详情：星等、色指数、升落与中天 | ● | ● |
@@ -135,12 +138,21 @@ npm run build    # 类型检查 + 生产构建
 npm run shot     # Playwright 截图（channel: chrome，不下载内核）
 ```
 
+部署：推送到 `main` 后由 GitHub Actions 构建并发布到 GitHub Pages（`.github/workflows/deploy.yml`）。
+首次使用需在仓库 **Settings → Pages → Source** 里选择 **GitHub Actions**。
+构建时用 `BASE_PATH` 指定子路径，本地复现：
+
+```bash
+BASE_PATH=/Sky-Testament/ npm run build
+BASE_PATH=/Sky-Testament/ npx vite preview
+```
+
 数据管道（原始数据放在 `data-raw/`，不提交）：
 
 ```bash
 npm run build:stars    # HYG v4.2 → public/data/stars.bin + star-names.json
 npm run build:cities   # GeoNames cities15000 → public/data/cities.json
-npm run build:font     # Noto Serif SC → public/fonts/*.woff2
+npm run build:font     # Noto Serif SC → src/assets/fonts/*.woff2
 ```
 
 原始数据下载地址：`hygdata_v42.csv.gz`（astronexus.com）、`cities15000.zip`（download.geonames.org/export/dump）、
@@ -175,6 +187,8 @@ npm run build:font     # Noto Serif SC → public/fonts/*.woff2
 - **v0.6.4 大气消光与星密度** —— 恒星按 Kasten–Young 大气质量做消光：越靠近地平线越暗（0.22 等 / 大气质量）、越红（+0.1 B−V / 大气质量），暗过极限星等的直接不画，同一时刻可见恒星从 1382 颗降到约 922 颗。另加一层星密度柔光：26×26 网格按星等加权（暗星权重更高），取高密度区做一层模糊，银河经过的天琴座—天鹅座一带会略微发亮，系数 0.025，克制到几乎只是「背景不那么均匀」
 
 - **v0.6.5 闪烁与倍速** —— 亮星闪烁：82 颗星等 ≤ 3.5 的恒星叠了一层呼吸亮点，周期 2.4–4.1 秒、相位按 HIP 哈希错开，尊重 `prefers-reduced-motion`。时间轴倍速改成现实时间倍数：1× 即现实流速，默认 1600×（整夜约 28 秒），另有 800× / 3200× / 6400×；实测 1600× 每秒推进 27 分钟、1× 3 秒推进 3 秒
+
+- **v0.7.0 分享卡片与线上部署** —— 「分享卡片」把当前时刻排成一张 1080×1350 的竖版图：城市、日期时间、坐标、星图、文案与种子，点「下载 PNG」直接保存。星图在卡片里不画 SVG 文字（导出环境里中文字体会掉字形），文字全部由 HTML 承担；导出前把整棵子树的计算样式压成内联样式，保证星点与连线的颜色被带过去。另接入 GitHub Actions：推送到 main 自动构建并发布到 GitHub Pages，构建用 `BASE_PATH` 适配子路径，字体与 favicon 也改走 Vite 的资源管线
 
 测试共 105 个。
 

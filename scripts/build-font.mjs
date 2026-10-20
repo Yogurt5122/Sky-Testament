@@ -7,14 +7,14 @@
  * 用法：
  *   node scripts/build-font.mjs
  * 输入：data-raw/NotoSerifSC.ttf（Noto Serif SC，SIL OFL 1.1）
- * 输出：public/fonts/noto-serif-sc-{400,500}.woff2
+ * 输出：src/assets/fonts/noto-serif-sc-{400,500}.woff2
  */
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import subsetFont from 'subset-font';
 
 const SOURCE_FONT = 'data-raw/NotoSerifSC.ttf';
-const OUT_DIR = 'public/fonts';
+const OUT_DIR = 'src/assets/fonts';
 const ROOTS = ['src', 'index.html', 'data/zh-overrides.json', 'public/data/cities.json'];
 const EXTENSIONS = new Set(['.ts', '.tsx', '.css', '.json', '.html']);
 

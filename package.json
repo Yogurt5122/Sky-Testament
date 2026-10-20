@@ -1,7 +1,7 @@
 {
   "name": "sky-testament",
   "private": true,
-  "version": "0.6.5",
+  "version": "0.7.0",
   "type": "module",
   "description": "输入一个时刻和地点，生成那张天空的星图，以及一段墓志铭",
   "engines": {
@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "astronomy-engine": "^2.1.19",
+    "html-to-image": "^1.11.13",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

@@ -66,6 +66,8 @@ interface ChartProps {
   onViewChange?: (view: { zoom: number; pan: { x: number; y: number } }) => void;
   /** 允许滚轮缩放与拖拽平移 */
   interactive?: boolean;
+  /** 不画任何 SVG 文字：导出卡片时用，文字改由 HTML 承担 */
+  textFree?: boolean;
 }
 
 /** 越亮的行星泛光越大，避免金星和海王星看起来一样 */
@@ -130,6 +132,7 @@ export function Chart({
   pan = { x: 0, y: 0 },
   onViewChange,
   interactive = false,
+  textFree = false,
 }: ChartProps) {
   const { size, center, radius, daylight } = scene;
   const minimal = scene.detail === 'minimal';
@@ -345,6 +348,7 @@ export function Chart({
         ))}
 
       {!minimal &&
+        !textFree &&
         cardinals.map(({ azimuth, label }) => {
           const radians = (azimuth * Math.PI) / 180;
           const distance = radius + 26;
@@ -392,6 +396,7 @@ export function Chart({
           ))}
 
         {atlas &&
+          !textFree &&
           [30, 60].map((altitude) => (
             <text
               key={`ring-${altitude}`}
@@ -556,8 +561,9 @@ export function Chart({
         </g>
       )}
 
-      <g className="chart-labels">
-        {scene.labels.map((label) => (
+      {!textFree && (
+        <g className="chart-labels">
+          {scene.labels.map((label) => (
           <text
             key={`${label.text}-${label.x.toFixed(1)}`}
             className={
@@ -579,9 +585,10 @@ export function Chart({
             {label.text}
           </text>
         ))}
-      </g>
+        </g>
+      )}
 
-      {atlas && (
+      {atlas && !textFree && (
         <text
           className="chart-ring-label"
           x={center}
