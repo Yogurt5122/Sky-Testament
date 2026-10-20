@@ -470,6 +470,22 @@ export function Chart({
         )}
       </g>
 
+      {/* 亮星闪烁：叠在星点上的小圆，透明度做缓慢呼吸 */}
+      <g className="chart-twinkle">
+        {scene.twinkleStars.map((star) => (
+          <circle
+            key={star.hip}
+            cx={star.x}
+            cy={star.y}
+            r={star.r}
+            style={{
+              animationDelay: `${((star.hip % 23) / 10).toFixed(1)}s`,
+              animationDuration: `${(2.4 + (star.hip % 17) / 10).toFixed(1)}s`,
+            }}
+          />
+        ))}
+      </g>
+
       <g className="chart-constellations">
         {scene.constellations.map((figure) => (
           <path key={figure.abbr} d={figure.d} style={{ strokeWidth: 0.85 * contentLabelScale }} />

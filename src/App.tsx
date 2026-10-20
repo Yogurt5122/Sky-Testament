@@ -112,7 +112,7 @@ export default function App() {
   const [variant, setVariant] = useState(0);
   const [nightMinutes, setNightMinutes] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(2);
+  const [speed, setSpeed] = useState(1600);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [started, setStarted] = useState(false);
   const [compareOn, setCompareOn] = useState(false);
@@ -562,7 +562,8 @@ export default function App() {
 
     let frame = 0;
     let last = performance.now();
-    const rate = Math.max(1, (totalMinutes / 18) * speed);
+    // 倍速 = 现实时间的倍数：1× 即每分钟走一分钟
+    const rate = speed / 60;
 
     const tick = (now: number) => {
       const delta = Math.min(0.12, (now - last) / 1000);
@@ -977,7 +978,7 @@ export default function App() {
                   </span>
                   <span className="night-now">{currentLocal?.label}</span>
                   <div className="segmented night-speed">
-                    {[0.5, 1, 2].map((value) => (
+                    {[1, 800, 1600, 3200, 6400].map((value) => (
                       <button
                         key={value}
                         type="button"

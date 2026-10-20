@@ -87,6 +87,8 @@ export interface BrightStar {
   mag: number;
   /** 星芒长度，已按 sizeScale 缩放 */
   spike: number;
+  /** 闪烁点的半径，已按 sizeScale 缩放 */
+  r: number;
   /** 偏转角，按 hip 稳定生成 */
   angle: number;
 }
@@ -107,6 +109,7 @@ export interface ChartScene {
   detail: DetailLevel;
   buckets: StarBucket[];
   brightStars: BrightStar[];
+  twinkleStars: Array<{ hip: number; x: number; y: number; r: number }>;
   density: DensityCell[];
   planets: PlanetDot[];
   moon: MoonDisc | null;
@@ -254,6 +257,7 @@ export function buildChartScene(
   );
   const bucketCounts = BUCKETS.map(() => Array.from({ length: COLOR_BIN_COUNT }, () => 0));
   const brightStars: BrightStar[] = [];
+  const twinkleStars: Array<{ hip: number; x: number; y: number; r: number }> = [];
   const density = new Float32Array(DENSITY_GRID * DENSITY_GRID);
   const labelCandidates: Array<{ x: number; y: number; mag: number; text: string }> = [];
   const objects: SceneObject[] = [];
@@ -309,6 +313,15 @@ export function buildChartScene(
       });
     }
 
+    if (apparentMag <= 3.5 && horizontal.altitude > 10) {
+      twinkleStars.push({
+        hip: star.hip,
+        x,
+        y,
+        r: Math.max(0.9, Math.min(2.2, 2.4 - apparentMag * 0.35)) * sizeScale,
+      });
+    }
+
     if (apparentMag <= 2.2 && horizontal.altitude > 5) {
       // 亮星单独画星芒：越亮越长，角度按 hip 稳定偏转
       brightStars.push({
@@ -317,6 +330,7 @@ export function buildChartScene(
         y,
         mag: apparentMag,
         spike: Math.max(6.5, 13.5 - apparentMag * 2.2) * sizeScale,
+        r: (apparentMag < 0 ? 2 : 1.5) * sizeScale,
         angle: hashAngle(star.hip),
       });
     }
@@ -488,10 +502,11 @@ export function buildChartScene(
   }
 
   const constellations: ConstellationFigurePath[] = [];
-  const positions = new Map<number, { x: number; y: number }>();
 
   if (detail !== 'minimal') {
     // 星座连线需要恒星位置，单独再算一次可见星坐标
+    const positions = new Map<number, { x: number; y: number }>();
+
     for (const star of stars) {
       if (star.mag > 6.5) continue;
       const moved = applyProperMotion(star, utcMs);
@@ -588,6 +603,7 @@ export function buildChartScene(
     detail,
     buckets,
     brightStars,
+    twinkleStars,
     density: densityCells,
     planets,
     moon,

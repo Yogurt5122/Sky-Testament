@@ -92,6 +92,28 @@ body.theme-night .chart-stars .star-halo {
   stroke-linecap: round;
 }
 
+.chart-twinkle circle {
+  fill: var(--ink);
+  animation: star-twinkle 3s ease-in-out infinite;
+}
+
+@keyframes star-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  45% {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-twinkle circle {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
 .chart-density circle {
   fill: var(--density-color);
 }
