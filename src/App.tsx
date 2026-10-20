@@ -12,12 +12,13 @@ import { generateEpitaph, type TextStyle } from './core/text/epitaph';
 import { findNightEvents } from './core/events';
 import { bodyDetails, starDetails } from './core/details';
 import { ObjectPanel } from './render/ObjectPanel';
+import { starSubtitle, starTitle, type StarDesignation } from './core/star-names';
 import starNamesZh from './data/star-names-zh.json';
 
 const NAME_ZH = starNamesZh as Record<string, string>;
 
 interface StarNameFile {
-  [hip: string]: { n?: string };
+  [hip: string]: { n?: string; b?: string; c?: string; f?: string };
 }
 
 function buildNameMap(raw: StarNameFile): Map<number, string> {
@@ -27,6 +28,15 @@ function buildNameMap(raw: StarNameFile): Map<number, string> {
     const chinese = NAME_ZH[entry.n];
     if (!chinese) continue;
     map.set(Number(hip), chinese);
+  }
+  return map;
+}
+
+function buildDesignationMap(raw: StarNameFile): Map<number, StarDesignation> {
+  const map = new Map<number, StarDesignation>();
+  for (const [hip, entry] of Object.entries(raw)) {
+    if (!entry.n && !entry.b && !entry.f) continue;
+    map.set(Number(hip), { en: entry.n, bayer: entry.b, con: entry.c, flam: entry.f });
   }
   return map;
 }
@@ -87,6 +97,9 @@ export default function App() {
   const [cities, setCities] = useState<City[]>([]);
   const [stars, setStars] = useState<Star[]>([]);
   const [starNames, setStarNames] = useState<Map<number, string>>(new Map());
+  const [starDesignations, setStarDesignations] = useState<Map<number, StarDesignation>>(
+    new Map(),
+  );
   const [cityQuery, setCityQuery] = useState('');
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +115,9 @@ export default function App() {
   const [speed, setSpeed] = useState(2);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [started, setStarted] = useState(false);
+  const [compareOn, setCompareOn] = useState(false);
+  const [compareDate, setCompareDate] = useState('');
+  const [compareTime, setCompareTime] = useState('20:00');
   const minutesRef = useRef(0);
 
   const qualityOption = SKY_QUALITY.find((option) => option.id === quality) ?? SKY_QUALITY[1];
@@ -145,6 +161,7 @@ export default function App() {
         if (cancelled) return;
         setStars(parseStarCatalog(buffer));
         setStarNames(buildNameMap(names));
+        setStarDesignations(buildDesignationMap(names));
       })
       .catch(() => {
         if (!cancelled) setStars([]);
@@ -208,6 +225,15 @@ export default function App() {
     });
   }, [displaySnapshot, stars, starNames, qualityOption.limit, detail]);
 
+  // 文案只认已提交的时刻：拖动预览时文字保持不动，松手后才重算
+  const committedScene = useMemo(() => {
+    if (!result || stars.length === 0) return null;
+    return buildChartScene(result.snapshot, stars, starNames, {
+      limitingMagnitude: qualityOption.limit,
+      detail,
+    });
+  }, [result, stars, starNames, qualityOption.limit, detail]);
+
   const events = useMemo(() => {
     if (!result) return [];
     const zone = form.timeZone.trim();
@@ -229,7 +255,16 @@ export default function App() {
     if (selectedObject.kind === 'star') {
       const star = stars.find((item) => item.hip === selectedObject.hip);
       if (!star) return null;
-      return starDetails(star, selectedObject.name || null, displaySnapshot, timeZone);
+
+      const designation = starDesignations.get(star.hip);
+      const zhName = selectedObject.name || undefined;
+      const info = starDetails(
+        star,
+        starTitle(designation, zhName, star.hip),
+        displaySnapshot,
+        timeZone,
+      );
+      return { ...info, subtitle: starSubtitle(designation, zhName, star.hip) };
     }
 
     return bodyDetails(
@@ -238,13 +273,66 @@ export default function App() {
       displaySnapshot,
       timeZone,
     );
-  }, [selectedObject, displaySnapshot, stars, timeZone]);
+  }, [selectedObject, displaySnapshot, stars, starDesignations, timeZone]);
+
+  const compareSnapshot = useMemo(() => {
+    if (!compareOn || !result) return null;
+    const [year, month, day] = compareDate.split('-').map(Number);
+    const [hour, minute] = compareTime.split(':').map(Number);
+    if (!year || !month || !day || Number.isNaN(hour) || Number.isNaN(minute)) return null;
+
+    try {
+      const local = resolveLocalTime({
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        timeZone: form.timeZone.trim(),
+      });
+      return computeSnapshot(local.utc, result.snapshot.geo);
+    } catch {
+      return null;
+    }
+  }, [compareOn, result, compareDate, compareTime, form.timeZone]);
+
+  const compareScene = useMemo(() => {
+    if (!compareSnapshot || stars.length === 0) return null;
+    return buildChartScene(compareSnapshot, stars, starNames, {
+      limitingMagnitude: qualityOption.limit,
+      detail,
+    });
+  }, [compareSnapshot, stars, starNames, qualityOption.limit, detail]);
+
+  const compareEpitaph = useMemo(() => {
+    if (!compareSnapshot) return null;
+    const facts = deriveFacts(compareSnapshot, compareScene?.brightestStar ?? null);
+    return generateEpitaph({
+      facts,
+      utc: compareSnapshot.utc,
+      latitude: compareSnapshot.geo.latitude,
+      longitude: compareSnapshot.geo.longitude,
+      style: textStyle,
+      variant,
+    });
+  }, [compareSnapshot, compareScene, textStyle, variant]);
+
+  const compareGapDays =
+    compareSnapshot && result
+      ? Math.abs(
+          Math.round(
+            (new Date(compareSnapshot.utc).getTime() -
+              new Date(result.snapshot.utc).getTime()) /
+              86400000,
+          ),
+        )
+      : 0;
 
   const epitaph = useMemo(() => {
-    if (!result || nightMinutes !== null) return null;
+    if (!result) return null;
     const facts = deriveFacts(
       result.snapshot,
-      scene?.brightestStar ?? null,
+      committedScene?.brightestStar ?? null,
       events.map((event) => event.title),
     );
     return generateEpitaph({
@@ -255,7 +343,7 @@ export default function App() {
       style: textStyle,
       variant,
     });
-  }, [result, scene, events, textStyle, variant]);
+  }, [result, committedScene, events, textStyle, variant]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -313,6 +401,7 @@ export default function App() {
       setPlaying(false);
       setSelectedId(null);
       setStarted(true);
+      setCompareOn(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -334,6 +423,23 @@ export default function App() {
 
     setForm(nextForm);
     computeFromForm(nextForm);
+  }
+
+  /** 进入对比时，默认取十年前的同一天，同一钟点。 */
+  function toggleCompare(): void {
+    if (compareOn) {
+      setCompareOn(false);
+      return;
+    }
+
+    const [year, month, day] = form.date.split('-').map(Number);
+    if (year && month && day) {
+      setCompareDate(
+        `${year - 10}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      );
+    }
+    setCompareTime(form.time);
+    setCompareOn(true);
   }
 
   const commitNight = useCallback(
@@ -399,7 +505,7 @@ export default function App() {
     : [];
 
   return (
-    <main className={started ? 'stage' : 'page'}>
+    <main className={started ? (compareOn ? 'stage stage--compare' : 'stage') : 'page'}>
       {!started && (
         <>
           <header className="masthead">
@@ -519,6 +625,15 @@ export default function App() {
               {currentLocal ? ` ${currentLocal.label}` : ''}
             </span>
 
+            <button
+              type="button"
+              className="stage-compare"
+              aria-pressed={compareOn}
+              onClick={toggleCompare}
+            >
+              {compareOn ? '退出对比' : '双时刻'}
+            </button>
+
             <div className="stage-options">
               <div className="option-group">
                 <span className="option-label">画面</span>
@@ -591,7 +706,56 @@ export default function App() {
             <span className="stage-mark">天穹遗嘱</span>
           </header>
 
-          {result && displaySnapshot && (
+          {compareOn ? (
+            <section className="compare">
+              <div className="compare-bar">
+                <span className="compare-label">对比时刻</span>
+                <input
+                  type="date"
+                  value={compareDate}
+                  onChange={(event) => setCompareDate(event.target.value)}
+                  aria-label="对比日期"
+                />
+                <input
+                  type="time"
+                  value={compareTime}
+                  onChange={(event) => setCompareTime(event.target.value)}
+                  aria-label="对比时间"
+                />
+                <span className="compare-gap">
+                  {compareSnapshot ? `相隔 ${compareGapDays} 天` : '请输入有效的对比时刻'}
+                </span>
+              </div>
+
+              <div className="compare-grid">
+                <article className="compare-pane">
+                  <p className="compare-date">
+                    {form.date.replace(/-/g, '.')} · {form.time}
+                  </p>
+                  {scene && (
+                    <figure className="chart-figure">
+                      <Chart scene={scene} />
+                    </figure>
+                  )}
+                  {epitaph && <p className="compare-epitaph">{epitaph.text}</p>}
+                </article>
+
+                <article className="compare-pane">
+                  <p className="compare-date">
+                    {compareDate ? compareDate.replace(/-/g, '.') : '—'} · {compareTime}
+                  </p>
+                  {compareScene && (
+                    <figure className="chart-figure">
+                      <Chart scene={compareScene} />
+                    </figure>
+                  )}
+                  {compareEpitaph && (
+                    <p className="compare-epitaph">{compareEpitaph.text}</p>
+                  )}
+                </article>
+              </div>
+            </section>
+          ) : result && displaySnapshot ? (
             <section className="stage-grid">
           <div className="stage-sky">
             {scene && (
@@ -758,7 +922,7 @@ export default function App() {
             <dl className="meta">
               <div>
                 <dt>UTC</dt>
-                <dd>{displaySnapshot.utc.replace('.000Z', 'Z')}</dd>
+                <dd>{displaySnapshot.utc.replace('T', ' ').replace(/\.\d{3}Z$/, 'Z')}</dd>
               </div>
               <div>
                 <dt>UTC 偏移</dt>
@@ -829,7 +993,7 @@ export default function App() {
             />
           )}
         </section>
-          )}
+          ) : null}
         </>
       )}
 

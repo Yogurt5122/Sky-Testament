@@ -53,8 +53,8 @@ function cardStyle(anchor: { x: number; y: number }): CSSProperties {
   const margin = 16;
   const width = Math.min(CARD_WIDTH, window.innerWidth - margin * 2);
 
-  let left = anchor.x + 24;
-  if (left + width > window.innerWidth - margin) left = anchor.x - width - 24;
+  let left = anchor.x + 44;
+  if (left + width > window.innerWidth - margin) left = anchor.x - width - 44;
   left = Math.max(margin, left);
 
   const top = Math.max(
@@ -78,12 +78,14 @@ export function ChartModal({
   const viewRef = useRef(view);
   const stageRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchDistance = useRef<number | null>(null);
   const dragOrigin = useRef<{ x: number; y: number } | null>(null);
   const pressOrigin = useRef<{ x: number; y: number } | null>(null);
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [leader, setLeader] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -115,6 +117,38 @@ export function ChartModal({
     const rect = modal.getBoundingClientRect();
     setAnchor({ x: screen.x - rect.left, y: screen.y - rect.top });
   }, [selectedId, details, scene, view, viewport]);
+
+  // 连接线：从天体的选中环连到信息卡最近的边
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    const modal = modalRef.current;
+    if (!anchor || !card || !modal) {
+      setLeader(null);
+      return;
+    }
+
+    const cardRect = card.getBoundingClientRect();
+    const modalRect = modal.getBoundingClientRect();
+    const left = cardRect.left - modalRect.left;
+    const top = cardRect.top - modalRect.top;
+    const right = cardRect.right - modalRect.left;
+    const bottom = cardRect.bottom - modalRect.top;
+
+    const x2 = Math.max(left, Math.min(anchor.x, right));
+    const y2 = Math.max(top, Math.min(anchor.y, bottom));
+    const dx = x2 - anchor.x;
+    const dy = y2 - anchor.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 20) {
+      setLeader(null);
+      return;
+    }
+
+    // 从选中环外侧起笔，不压住天体贴片
+    const x1 = anchor.x + (dx / length) * 14;
+    const y1 = anchor.y + (dy / length) * 14;
+    setLeader({ x1, y1, x2, y2 });
+  }, [anchor, details, view, viewport]);
 
   const apply = useCallback((next: View) => {
     const clamped = clampView(next);
@@ -301,9 +335,16 @@ export function ChartModal({
       </div>
 
       {details && onClearSelection && anchor && (
-        <div className="chart-modal-card" style={cardStyle(anchor)}>
+        <div className="chart-modal-card" ref={cardRef} style={cardStyle(anchor)}>
           <ObjectPanel details={details} onClose={onClearSelection} />
         </div>
+      )}
+
+      {leader && (
+        <svg className="chart-modal-link" aria-hidden="true">
+          <line x1={leader.x1} y1={leader.y1} x2={leader.x2} y2={leader.y2} />
+          <circle cx={leader.x1} cy={leader.y1} r={1.8} />
+        </svg>
       )}
 
       <div className="chart-modal-controls">
