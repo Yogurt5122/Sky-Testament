@@ -21,6 +21,9 @@
   --rule: #d8d2c4;
   --accent: #8c5a3c;
   --overlay: rgba(244, 240, 232, 0.92);
+  --sky-center: #fbf7ef;
+  --sky-mid: #f5efe3;
+  --sky-edge: #e6dbc7;
   --mono: 'IBM Plex Mono', 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
   --serif: 'Sky Serif', 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
   color-scheme: light;
@@ -33,11 +36,68 @@ body.theme-night {
   --rule: #262a33;
   --accent: #c9915f;
   --overlay: rgba(22, 25, 33, 0.92);
+  --sky-center: #04060a;
+  --sky-mid: #0a0e15;
+  --sky-edge: #1b1d22;
   color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* 主题切换时让星图与界面一起渐变，而不是瞬间跳变 */
+.chart * {
+  transition: fill 700ms ease, stroke 700ms ease, opacity 700ms ease;
+}
+
+.chart stop {
+  transition: stop-color 700ms ease;
+}
+
+.stage-bar,
+.stage-rail,
+.stage-sky,
+.footer {
+  transition: background-color 700ms ease, color 700ms ease, border-color 700ms ease;
+}
+
+.chart-sky-center {
+  stop-color: var(--sky-center);
+}
+
+.chart-sky-mid {
+  stop-color: var(--sky-mid);
+}
+
+.chart-sky-edge {
+  stop-color: var(--sky-edge);
+}
+
+.chart-stars .star-halo {
+  fill: var(--ink);
+  opacity: 0.3;
+}
+
+body.theme-night .chart-stars .star-halo {
+  fill: #dfe6f4;
+  opacity: 0.38;
+}
+
+.chart-star-spikes line {
+  stroke: var(--ink);
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+
+.chart-star-aura-center {
+  stop-color: var(--ink);
+  stop-opacity: 0.3;
+}
+
+.chart-star-aura-edge {
+  stop-color: var(--ink);
+  stop-opacity: 0;
 }
 
 html,
@@ -53,7 +113,7 @@ body {
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 320ms ease, color 320ms ease;
+  transition: background-color 700ms ease, color 700ms ease;
 }
 
 body.theme-night .panel {

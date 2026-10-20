@@ -79,6 +79,18 @@ export interface SceneObject {
   bodyId?: string;
 }
 
+/** 亮星：单独画星芒，避免和合并路径绑死 */
+export interface BrightStar {
+  hip: number;
+  x: number;
+  y: number;
+  mag: number;
+  /** 星芒长度，已按 sizeScale 缩放 */
+  spike: number;
+  /** 偏转角，按 hip 稳定生成 */
+  angle: number;
+}
+
 export interface ChartScene {
   size: number;
   center: number;
@@ -86,6 +98,7 @@ export interface ChartScene {
   daylight: boolean;
   detail: DetailLevel;
   buckets: StarBucket[];
+  brightStars: BrightStar[];
   planets: PlanetDot[];
   moon: MoonDisc | null;
   constellations: ConstellationFigurePath[];
@@ -113,6 +126,15 @@ export interface BuildSceneOptions {
    * 行星与月亮保持屏幕尺寸不变（真实天空里它们仍是点）。
    */
   sizeScale?: number;
+}
+
+/** 按编号生成稳定的偏转角，避免所有星芒同向 */
+function hashAngle(seed: number): number {
+  let hash = seed >>> 0;
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x27d4eb2d) >>> 0;
+  hash ^= hash >>> 15;
+  return (hash % 900) / 10;
 }
 
 /** 星等分桶：半径按印刷观感设定，单位为 viewBox 单位。 */
@@ -209,6 +231,7 @@ export function buildChartScene(
     Array.from({ length: COLOR_BIN_COUNT }, () => [] as string[]),
   );
   const bucketCounts = BUCKETS.map(() => Array.from({ length: COLOR_BIN_COUNT }, () => 0));
+  const brightStars: BrightStar[] = [];
   const labelCandidates: Array<{ x: number; y: number; mag: number; text: string }> = [];
   const objects: SceneObject[] = [];
   let starCount = 0;
@@ -246,6 +269,18 @@ export function buildChartScene(
         y,
         magnitude: star.mag,
         hip: star.hip,
+      });
+    }
+
+    if (star.mag <= 2.2 && horizontal.altitude > 5) {
+      // 亮星单独画星芒：越亮越长，角度按 hip 稳定偏转
+      brightStars.push({
+        hip: star.hip,
+        x,
+        y,
+        mag: star.mag,
+        spike: Math.max(6.5, 13.5 - star.mag * 2.2) * sizeScale,
+        angle: hashAngle(star.hip),
       });
     }
 
@@ -490,6 +525,7 @@ export function buildChartScene(
     daylight: snapshot.daylight,
     detail,
     buckets,
+    brightStars,
     planets,
     moon,
     constellations,

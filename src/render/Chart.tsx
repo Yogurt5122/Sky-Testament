@@ -299,6 +299,19 @@ export function Chart({
         <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
           <circle cx={center} cy={center} r={radius} />
         </clipPath>
+        {/* 天顶到地平线的颜色层次：中心更深，边缘偏暖，像光污染的天光 */}
+        <radialGradient id={`${clipId}-sky`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" className="chart-sky-center" />
+          <stop offset="68%" className="chart-sky-mid" />
+          <stop offset="100%" className="chart-sky-edge" />
+        </radialGradient>
+        <filter id={`${clipId}-star-glow`} x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="1.2" />
+        </filter>
+        <radialGradient id={`${clipId}-star-aura`}>
+          <stop offset="0%" className="chart-star-aura-center" />
+          <stop offset="100%" className="chart-star-aura-edge" />
+        </radialGradient>
         {scene.planets.map((planet) => (
           <radialGradient key={planet.id} id={`${clipId}-glow-${planet.id}`}>
             <stop offset="0%" stopColor={planet.color} stopOpacity={0.7} />
@@ -308,7 +321,13 @@ export function Chart({
         ))}
       </defs>
 
-      <circle className="chart-disc" cx={center} cy={center} r={radius} />
+      <circle
+        className="chart-disc"
+        cx={center}
+        cy={center}
+        r={radius}
+        style={{ fill: `url(#${clipId}-sky)` }}
+      />
 
       {!minimal &&
         tickMarks.map((tick) => (
@@ -396,7 +415,33 @@ export function Chart({
         </g>
       )}
 
+      <g className="chart-star-spikes">
+        {scene.brightStars.map((star) => {
+          const spike = star.spike / Math.sqrt(zoom);
+          return (
+            <g
+              key={star.hip}
+              transform={`translate(${star.x} ${star.y}) rotate(${star.angle})`}
+              style={{ opacity: Math.min(0.6, 0.32 + (2.2 - star.mag) * 0.06) }}
+            >
+              <circle r={spike * 1.25} fill={`url(#${clipId}-star-aura)`} />
+              <line x1={-spike} y1={0} x2={spike} y2={0} />
+              <line x1={0} y1={-spike} x2={0} y2={spike} />
+            </g>
+          );
+        })}
+      </g>
+
       <g className="chart-stars">
+        {/* 亮星合并成一条路径做柔光，只模糊一层，避免 8 次全屏重绘 */}
+        <path
+          className="star-halo"
+          d={scene.buckets
+            .filter((bucket) => bucket.radius >= 2.4 && bucket.d)
+            .map((bucket) => bucket.d)
+            .join('')}
+          filter={`url(#${clipId}-star-glow)`}
+        />
         {scene.buckets.map((bucket) =>
           bucket.d ? (
             <path
@@ -419,9 +464,11 @@ export function Chart({
           const glowRadius = planet.r * planetGlowScale(planet.magnitude);
           // 暗行星的光晕很小，星芒按光晕算会短到看不见，给它一个下限
           const faint = planet.magnitude !== null && planet.magnitude >= 3;
-          const spikeLength = faint
-            ? Math.max(glowRadius * 1.35, 10 * (planet.r / 2.8))
-            : glowRadius * 1.35;
+          const baseSpike = faint
+            ? Math.max(glowRadius * 1.15, 8.5 * (planet.r / 2.8))
+            : glowRadius * 1.15;
+          // 星芒按屏幕尺寸补偿：放大时不再跟着拉长
+          const spikeLength = baseSpike / Math.sqrt(zoom);
           const spikeOpacity = faint ? 0.26 : 0.24;
           return (
             <g key={planet.id}>
