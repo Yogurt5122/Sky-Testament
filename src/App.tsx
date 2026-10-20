@@ -246,12 +246,14 @@ export default function App() {
     return findNightEvents(nightWindow, result.snapshot.geo, dateKeys);
   }, [result, nightWindow, form.timeZone]);
 
+  // 选中对象只认已提交时刻：拖动预览时信息卡保持不动，松手后才重新确认
   const selectedObject = selectedId
-    ? (scene?.objects.find((object) => object.id === selectedId) ?? null)
+    ? (committedScene?.objects.find((object) => object.id === selectedId) ?? null)
     : null;
 
   const details = useMemo(() => {
-    if (!selectedObject || !displaySnapshot) return null;
+    if (!selectedObject || !result) return null;
+    const snapshot = result.snapshot;
 
     if (selectedObject.kind === 'star') {
       const star = stars.find((item) => item.hip === selectedObject.hip);
@@ -262,7 +264,7 @@ export default function App() {
       const info = starDetails(
         star,
         starTitle(designation, zhName, star.hip),
-        displaySnapshot,
+        snapshot,
         timeZone,
       );
       return { ...info, subtitle: starSubtitle(designation, zhName, star.hip) };
@@ -271,10 +273,10 @@ export default function App() {
     return bodyDetails(
       selectedObject.bodyId ?? 'moon',
       selectedObject.name,
-      displaySnapshot,
+      snapshot,
       timeZone,
     );
-  }, [selectedObject, displaySnapshot, stars, starDesignations, timeZone]);
+  }, [selectedObject, result, stars, starDesignations, timeZone]);
 
   const compareSnapshot = useMemo(() => {
     if (!compareOn || !result) return null;
