@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Chart } from './Chart';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { Chart, pickObjectAt } from './Chart';
 import type { ObjectDetails } from '../core/details';
 import { ObjectPanel } from './ObjectPanel';
 import type { ChartScene } from './scene';
@@ -45,6 +45,26 @@ interface ChartModalProps {
  * 浏览器会按最终尺寸重新栅格化矢量，任何倍率都清晰，
  * 标签字号按 viewBox 比例反向缩小，因此屏幕上大小恒定。
  */
+/** 信息卡尺寸上限，用来把卡片限制在视口内 */
+const CARD_WIDTH = 340;
+const CARD_HEIGHT = 280;
+
+function cardStyle(anchor: { x: number; y: number }): CSSProperties {
+  const margin = 16;
+  const width = Math.min(CARD_WIDTH, window.innerWidth - margin * 2);
+
+  let left = anchor.x + 24;
+  if (left + width > window.innerWidth - margin) left = anchor.x - width - 24;
+  left = Math.max(margin, left);
+
+  const top = Math.max(
+    72,
+    Math.min(window.innerHeight - CARD_HEIGHT - margin, anchor.y - 90),
+  );
+
+  return { left, top, width };
+}
+
 export function ChartModal({
   scene,
   onClose,
@@ -57,10 +77,44 @@ export function ChartModal({
 
   const viewRef = useRef(view);
   const stageRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchDistance = useRef<number | null>(null);
   const dragOrigin = useRef<{ x: number; y: number } | null>(null);
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null);
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const update = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  // 选中天体的屏幕位置：随缩放与平移实时更新，信息卡贴着它
+  useLayoutEffect(() => {
+    if (!selectedId || !details) {
+      setAnchor(null);
+      return;
+    }
+
+    const stage = stageRef.current;
+    const modal = modalRef.current;
+    const svg = stage?.querySelector('svg');
+    const object = scene.objects.find((item) => item.id === selectedId);
+    if (!stage || !modal || !svg || !object) return;
+
+    const point = svg.createSVGPoint();
+    point.x = object.x;
+    point.y = object.y;
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return;
+    const screen = point.matrixTransform(matrix);
+    const rect = modal.getBoundingClientRect();
+    setAnchor({ x: screen.x - rect.left, y: screen.y - rect.top });
+  }, [selectedId, details, scene, view, viewport]);
 
   const apply = useCallback((next: View) => {
     const clamped = clampView(next);
@@ -142,10 +196,12 @@ export function ChartModal({
 
     if (pointers.current.size === 1) {
       dragOrigin.current = { x: event.clientX, y: event.clientY };
+      pressOrigin.current = { x: event.clientX, y: event.clientY };
     } else if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       pinchDistance.current = Math.hypot(a.x - b.x, a.y - b.y);
       dragOrigin.current = null;
+      pressOrigin.current = null;
     }
   };
 
@@ -184,6 +240,10 @@ export function ChartModal({
   };
 
   const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const wasSingle = pointers.current.size === 1;
+    const origin = pressOrigin.current;
+    pressOrigin.current = null;
+
     pointers.current.delete(event.pointerId);
     if (pointers.current.size < 2) pinchDistance.current = null;
 
@@ -193,10 +253,28 @@ export function ChartModal({
       const [remaining] = [...pointers.current.values()];
       dragOrigin.current = { x: remaining.x, y: remaining.y };
     }
+
+    // 全屏下指针被舞台捕获，SVG 收不到 click，这里用"按下到抬起的位移"判定点选
+    if (!wasSingle || !origin || !onPick) return;
+    if (Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 6) return;
+
+    const stage = stageRef.current;
+    const svg = stage?.querySelector('svg');
+    if (!stage || !svg) return;
+
+    const current = viewRef.current;
+    const id = pickObjectAt(
+      scene,
+      { x: current.x, y: current.y, width: current.width, height: current.width },
+      svg.getBoundingClientRect(),
+      event.clientX,
+      event.clientY,
+    );
+    if (id) onPick(id);
   };
 
   return (
-    <div className="chart-modal" role="dialog" aria-modal="true" aria-label="星图">
+    <div className="chart-modal" ref={modalRef} role="dialog" aria-modal="true" aria-label="星图">
       <div className="chart-modal-bar">
         <span className="chart-modal-title">星图</span>
         <span className="chart-modal-hint">拖动平移 · 滚轮或双指缩放 · 双击复位</span>
@@ -218,13 +296,14 @@ export function ChartModal({
           scene={scene}
           viewBox={{ x: view.x, y: view.y, width: view.width, height: view.width }}
           labelScale={view.width / SCENE_SIZE}
-          onPick={onPick}
           selectedId={selectedId}
         />
       </div>
 
-      {details && onClearSelection && (
-        <ObjectPanel details={details} onClose={onClearSelection} floating />
+      {details && onClearSelection && anchor && (
+        <div className="chart-modal-card" style={cardStyle(anchor)}>
+          <ObjectPanel details={details} onClose={onClearSelection} />
+        </div>
       )}
 
       <div className="chart-modal-controls">

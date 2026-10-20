@@ -20,6 +20,13 @@ describe('findNightEvents', () => {
     expect(events.some((event) => event.title === '猎户座流星雨')).toBe(true);
   });
 
+  it('按本地日期匹配，跨时区不会错一天', () => {
+    // 美西的 10-21 夜，日落已经落在 UTC 的 10-22
+    const window = windowOn(2026, 10, 22);
+    const events = findNightEvents(window, SHANGHAI, ['10-21', '10-22']);
+    expect(events.some((event) => event.title === '猎户座流星雨')).toBe(true);
+  });
+
   it('普通夜晚没有流星雨', () => {
     const events = findNightEvents(windowOn(2026, 10, 19), SHANGHAI);
     expect(events.some((event) => event.kind === 'meteor')).toBe(false);

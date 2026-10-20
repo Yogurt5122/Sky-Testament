@@ -101,6 +101,7 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(2);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [started, setStarted] = useState(false);
   const minutesRef = useRef(0);
 
   const qualityOption = SKY_QUALITY.find((option) => option.id === quality) ?? SKY_QUALITY[1];
@@ -207,10 +208,16 @@ export default function App() {
     });
   }, [displaySnapshot, stars, starNames, qualityOption.limit, detail]);
 
-  const events = useMemo(
-    () => (result ? findNightEvents(nightWindow, result.snapshot.geo) : []),
-    [result, nightWindow],
-  );
+  const events = useMemo(() => {
+    if (!result) return [];
+    const zone = form.timeZone.trim();
+    const dateKeys = nightWindow
+      ? [nightWindow.sunset, nightWindow.sunrise].map((date) =>
+          localDateTimeOf(date, zone).date.slice(5),
+        )
+      : [];
+    return findNightEvents(nightWindow, result.snapshot.geo, dateKeys);
+  }, [result, nightWindow, form.timeZone]);
 
   const selectedObject = selectedId
     ? (scene?.objects.find((object) => object.id === selectedId) ?? null)
@@ -305,6 +312,7 @@ export default function App() {
       setNightMinutes(null);
       setPlaying(false);
       setSelectedId(null);
+      setStarted(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -391,8 +399,10 @@ export default function App() {
     : [];
 
   return (
-    <main className="page">
-      <header className="masthead">
+    <main className={started ? 'stage' : 'page'}>
+      {!started && (
+        <>
+          <header className="masthead">
         <p className="kicker">M5 · 详情与天象</p>
         <h1>天穹遗嘱</h1>
         <p className="lede">
@@ -489,83 +499,101 @@ export default function App() {
           </label>
         </div>
 
-        <div className="options">
-          <div className="option-group">
-            <span className="option-label">画面</span>
-            <div className="segmented">
-              <button
-                type="button"
-                className={theme === 'night' ? 'is-active' : ''}
-                onClick={() => setTheme('night')}
-              >
-                夜空
-              </button>
-              <button
-                type="button"
-                className={theme === 'paper' ? 'is-active' : ''}
-                onClick={() => setTheme('paper')}
-              >
-                纸
-              </button>
-            </div>
-          </div>
-
-          <div className="option-group">
-            <span className="option-label">天空质量</span>
-            <div className="segmented">
-              {SKY_QUALITY.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={quality === option.id ? 'is-active' : ''}
-                  onClick={() => setQuality(option.id)}
-                  title={option.hint}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="option-group">
-            <span className="option-label">图例</span>
-            <div className="segmented">
-              <button
-                type="button"
-                className={detail === 'minimal' ? 'is-active' : ''}
-                onClick={() => setDetail('minimal')}
-                title="只画星星，不要任何标注"
-              >
-                纯净
-              </button>
-              <button
-                type="button"
-                className={detail === 'standard' ? 'is-active' : ''}
-                onClick={() => setDetail('standard')}
-                title="主要星座连线、行星与亮星名"
-              >
-                标准
-              </button>
-              <button
-                type="button"
-                className={detail === 'atlas' ? 'is-active' : ''}
-                onClick={() => setDetail('atlas')}
-                title="叠加黄道、天赤道、高度环标注与更多数据"
-              >
-                图谱
-              </button>
-            </div>
-          </div>
-        </div>
-
         <button type="submit">计算这一刻的天空</button>
       </form>
 
-      {error && <p className="error" role="alert">{error}</p>}
+          {error && <p className="error" role="alert">{error}</p>}
+          <p className="entry-note">所有星历在本机计算 · 不上传任何输入</p>
+        </>
+      )}
 
-      {result && displaySnapshot && (
-        <section className="result">
-          <div className="chart-column">
+      {started && (
+        <>
+          <header className="stage-bar">
+            <button type="button" className="stage-back" onClick={() => setStarted(false)}>
+              ← 返回修改
+            </button>
+            <span className="stage-place">
+              {selectedCity ? (selectedCity.zh ?? selectedCity.name) : '此刻'}
+              {currentLocal ? ` · ${currentLocal.date.replace(/-/g, '.')}` : ''}
+              {currentLocal ? ` ${currentLocal.label}` : ''}
+            </span>
+
+            <div className="stage-options">
+              <div className="option-group">
+                <span className="option-label">画面</span>
+                <div className="segmented">
+                  <button
+                    type="button"
+                    className={theme === 'night' ? 'is-active' : ''}
+                    onClick={() => setTheme('night')}
+                  >
+                    夜空
+                  </button>
+                  <button
+                    type="button"
+                    className={theme === 'paper' ? 'is-active' : ''}
+                    onClick={() => setTheme('paper')}
+                  >
+                    纸
+                  </button>
+                </div>
+              </div>
+
+              <div className="option-group">
+                <span className="option-label">质量</span>
+                <div className="segmented">
+                  {SKY_QUALITY.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={quality === option.id ? 'is-active' : ''}
+                      onClick={() => setQuality(option.id)}
+                      title={option.hint}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="option-group">
+                <span className="option-label">图例</span>
+                <div className="segmented">
+                  <button
+                    type="button"
+                    className={detail === 'minimal' ? 'is-active' : ''}
+                    onClick={() => setDetail('minimal')}
+                    title="只画星星，不要任何标注"
+                  >
+                    纯净
+                  </button>
+                  <button
+                    type="button"
+                    className={detail === 'standard' ? 'is-active' : ''}
+                    onClick={() => setDetail('standard')}
+                    title="主要星座连线、行星与亮星名"
+                  >
+                    标准
+                  </button>
+                  <button
+                    type="button"
+                    className={detail === 'atlas' ? 'is-active' : ''}
+                    onClick={() => setDetail('atlas')}
+                    title="叠加黄道、天赤道、高度环标注与更多数据"
+                  >
+                    图谱
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <span className="stage-mark">天穹遗嘱</span>
+          </header>
+
+          {result && displaySnapshot && (
+            <section className="stage-grid">
+          <div className="stage-sky">
             {scene && (
               <>
                 <figure className="chart-figure">
@@ -578,11 +606,22 @@ export default function App() {
                 </figure>
                 <div className="chart-actions">
                   <button type="button" className="chart-trigger" onClick={() => setChartOpen(true)}>
-                    查看星图
+                    全屏星空
                   </button>
                 </div>
               </>
             )}
+          </div>
+
+          <aside className="stage-rail">
+            <p className="stage-date">{currentLocal?.date.replace(/-/g, '.')}</p>
+            <h1 className="stage-title">
+              {selectedCity ? (selectedCity.zh ?? selectedCity.name) : '此刻'}
+            </h1>
+            <p className="stage-coord">
+              {currentLocal?.label} · {displaySnapshot.geo.latitude.toFixed(2)}°N{' '}
+              {displaySnapshot.geo.longitude.toFixed(2)}°E
+            </p>
 
             {epitaph && (
               <section className="epitaph">
@@ -614,14 +653,10 @@ export default function App() {
                 </div>
 
                 <p className="epitaph-text">{epitaph.text}</p>
-                <p className="epitaph-seed">
-                  seed {epitaph.seed} · 同一时刻同一地点，永远得到这一段
-                </p>
+                <p className="epitaph-seed">seed {epitaph.seed}</p>
               </section>
             )}
-          </div>
 
-          <aside className="info-rail">
             {details && <ObjectPanel details={details} onClose={() => setSelectedId(null)} />}
 
             {nightWindow && (
@@ -768,9 +803,7 @@ export default function App() {
                 <tr>
                   <th>天体</th>
                   <th className="num">高度</th>
-                  <th className="num">方位</th>
                   <th className="num">星等</th>
-                  <th>位置</th>
                 </tr>
               </thead>
               <tbody>
@@ -778,9 +811,7 @@ export default function App() {
                   <tr key={body.id} className={body.aboveHorizon ? '' : 'below'}>
                     <td>{body.name}</td>
                     <td className="num">{formatAltitude(body.altitude)}</td>
-                    <td className="num">{body.azimuth.toFixed(1)}°</td>
                     <td className="num">{formatMagnitude(body.magnitude)}</td>
-                    <td>{body.aboveHorizon ? '地平线以上' : '地平线以下'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -798,6 +829,8 @@ export default function App() {
             />
           )}
         </section>
+          )}
+        </>
       )}
 
       <footer className="footer">

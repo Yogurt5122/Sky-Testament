@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type { ChartScene, MoonDisc } from './scene';
 
 export interface ChartViewBox {
@@ -6,6 +7,37 @@ export interface ChartViewBox {
   width: number;
   /** 与 width 相等：圆形星图的画布是正方形 */
   height: number;
+}
+
+/**
+ * 把一次屏幕点击换算成场景坐标，找出最近的天体。
+ *
+ * 判定半径按屏幕像素折算：放大后不会"一点选中一片"。
+ */
+export function pickObjectAt(
+  scene: ChartScene,
+  viewBox: ChartViewBox,
+  rect: DOMRect,
+  clientX: number,
+  clientY: number,
+  radiusPx = 14,
+): string | null {
+  const scale = Math.max(rect.width / viewBox.width, rect.height / viewBox.height);
+  const offsetX = (rect.width - viewBox.width * scale) / 2;
+  const offsetY = (rect.height - viewBox.height * scale) / 2;
+  const x = viewBox.x + (clientX - rect.left - offsetX) / scale;
+  const y = viewBox.y + (clientY - rect.top - offsetY) / scale;
+
+  let bestId: string | null = null;
+  let bestDistance = radiusPx / scale;
+  for (const object of scene.objects) {
+    const distance = Math.hypot(object.x - x, object.y - y);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestId = object.id;
+    }
+  }
+  return bestId;
 }
 
 interface ChartProps {
@@ -83,27 +115,20 @@ export function Chart({
     ? (scene.objects.find((object) => object.id === selectedId) ?? null)
     : null;
 
+  const pressRef = useRef<{ x: number; y: number } | null>(null);
+  const draggedRef = useRef(false);
+
   const handleClick = (event: React.MouseEvent<SVGSVGElement>) => {
     if (!onPick) return;
+    if (draggedRef.current) {
+      draggedRef.current = false;
+      return;
+    }
 
     const rect = event.currentTarget.getBoundingClientRect();
     const vb = viewBox ?? { x: 0, y: 0, width: size, height: size };
-    const scale = Math.max(rect.width / vb.width, rect.height / vb.height);
-    const offsetX = (rect.width - vb.width * scale) / 2;
-    const offsetY = (rect.height - vb.height * scale) / 2;
-    const x = vb.x + (event.clientX - rect.left - offsetX) / scale;
-    const y = vb.y + (event.clientY - rect.top - offsetY) / scale;
-
-    let bestId: string | null = null;
-    let bestDistance = 16;
-    for (const object of scene.objects) {
-      const distance = Math.hypot(object.x - x, object.y - y);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestId = object.id;
-      }
-    }
-    if (bestId) onPick(bestId);
+    const id = pickObjectAt(scene, vb, rect, event.clientX, event.clientY);
+    if (id) onPick(id);
   };
 
   const tickMarks = Array.from({ length: 36 }, (_, index) => {
@@ -130,6 +155,17 @@ export function Chart({
       role="img"
       aria-label={`${daylight ? '白昼' : '夜间'}星空，可见 ${scene.starCount} 颗恒星`}
       onClick={handleClick}
+      onPointerDown={(event) => {
+        pressRef.current = { x: event.clientX, y: event.clientY };
+        draggedRef.current = false;
+      }}
+      onPointerMove={(event) => {
+        const start = pressRef.current;
+        if (!start) return;
+        if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) {
+          draggedRef.current = true;
+        }
+      }}
       style={onPick ? { cursor: 'crosshair' } : undefined}
     >
       <circle className="chart-disc" cx={center} cy={center} r={radius} />

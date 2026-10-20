@@ -114,11 +114,14 @@ function conjunction(window: NightWindow, geo: GeoPoint): NightEvent | null {
   };
 }
 
-function meteorShower(window: NightWindow): NightEvent | null {
-  // 用日落与日出所在的 UTC 日期去匹配峰值日
-  const dates = [window.sunset, window.sunrise].map(
-    (date) => `${date.getUTCMonth() + 1}-${date.getUTCDate()}`,
-  );
+function meteorShower(window: NightWindow, dateKeys: string[]): NightEvent | null {
+  // 优先用调用方给来的本地日期（MM-DD），避免跨时区时错一天
+  const dates =
+    dateKeys.length > 0
+      ? dateKeys
+      : [window.sunset, window.sunrise].map(
+          (date) => `${date.getUTCMonth() + 1}-${date.getUTCDate()}`,
+        );
 
   for (const shower of METEOR_SHOWERS) {
     const key = `${shower.month}-${shower.day}`;
@@ -135,7 +138,11 @@ function meteorShower(window: NightWindow): NightEvent | null {
 }
 
 /** 这一夜值得记住的天象：月食、月合行星、流星雨极大。 */
-export function findNightEvents(window: NightWindow | null, geo: GeoPoint): NightEvent[] {
+export function findNightEvents(
+  window: NightWindow | null,
+  geo: GeoPoint,
+  dateKeys: string[] = [],
+): NightEvent[] {
   if (!window) return [];
 
   const events: NightEvent[] = [];
@@ -145,7 +152,7 @@ export function findNightEvents(window: NightWindow | null, geo: GeoPoint): Nigh
   const meet = conjunction(window, geo);
   if (meet) events.push(meet);
 
-  const meteor = meteorShower(window);
+  const meteor = meteorShower(window, dateKeys);
   if (meteor) events.push(meteor);
 
   return events;
