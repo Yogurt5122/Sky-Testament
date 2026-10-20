@@ -450,6 +450,65 @@ body.theme-night .page .panel {
   color: var(--ink);
 }
 
+.stage-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+}
+
+.stage-live:hover {
+  background: none;
+  color: var(--ink);
+}
+
+.stage-live.is-live {
+  color: var(--accent);
+}
+
+.stage-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+}
+
+.stage-live.is-live .stage-live-dot {
+  opacity: 1;
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.stage-live-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: -24px 0 30px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+
 .compare {
   width: 100%;
   max-width: 1400px;
@@ -643,13 +702,18 @@ body.theme-night .page .panel {
   justify-content: center;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.stage-sky .chart-wrap {
+  width: min(100%, calc(100vh - 230px));
+  max-width: 700px;
+  margin: 0 0 0 auto;
 }
 
 .stage-sky .chart-figure {
-  width: min(100%, calc(100vh - 230px));
-  max-width: 820px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
 }
 
 .stage-sky .chart-actions {
@@ -791,9 +855,15 @@ body.theme-night .page .panel {
     overflow: visible;
   }
 
+  .stage-sky .chart-wrap {
+    width: 100%;
+    max-width: none;
+    margin: 0 0 24px;
+  }
+
   .stage-sky .chart-figure {
     width: 100%;
-    margin: 0 auto 24px;
+    margin: 0;
   }
 
   .stage-rail {
@@ -908,6 +978,14 @@ tr.below td {
 
 .chart--interactive {
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.chart-panning {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
 }
 
 .stage-reset {
@@ -1325,6 +1403,94 @@ body.theme-night .chart-moon-lit {
   background: var(--overlay);
   border-color: var(--rule);
   backdrop-filter: blur(6px);
+}
+
+/* 二屏左侧：天体表与行星信息，沿用右栏的细线风格 */
+.stage-left {
+  position: absolute;
+  top: 0;
+  left: -32px;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  z-index: 2;
+}
+
+.stage-left .stage-table {
+  padding: 0;
+  background: none;
+  border: 0;
+  backdrop-filter: none;
+}
+
+.stage-left .stage-table table {
+  font-size: 11px;
+}
+
+.stage-left .stage-table th {
+  padding: 7px 0;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+.stage-left .stage-table td {
+  padding: 5px 0;
+}
+
+.stage-left .stage-table th:first-child {
+  width: 42%;
+}
+
+.stage-left .stage-table th:last-child {
+  width: 24%;
+}
+
+.stage-left .stage-table td:first-child {
+  white-space: nowrap;
+}
+
+.stage-left .object-panel {
+  position: static;
+  width: auto;
+  margin: 0;
+  padding: 18px 0 0;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  backdrop-filter: none;
+}
+
+.stage-left .object-panel h3 {
+  font-size: 15px;
+}
+
+.stage-left .object-panel header {
+  margin-bottom: 8px;
+}
+
+.stage-left .object-panel header span {
+  font-size: 10px;
+}
+
+.stage-left .object-panel dl {
+  gap: 7px 0;
+}
+
+.stage-left .object-panel dt {
+  font-size: 9px;
+}
+
+.stage-left .object-panel dd {
+  font-size: 12px;
+}
+
+@media (max-width: 1300px) {
+  .stage-left {
+    position: static;
+    width: auto;
+    margin: 0 0 20px;
+  }
 }
 
 .events {

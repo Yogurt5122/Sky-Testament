@@ -239,9 +239,14 @@ export function Chart({
       role="img"
       aria-label={`${daylight ? '白昼' : '夜间'}星空，可见 ${scene.starCount} 颗恒星`}
       onClick={handleClick}
+      onDragStart={(event) => event.preventDefault()}
       onPointerDown={(event) => {
         pressRef.current = { x: event.clientX, y: event.clientY };
         draggedRef.current = false;
+        if (interactive) {
+          // 拖动期间关掉浏览器原生的文字选中
+          document.body.classList.add('chart-panning');
+        }
         if (interactive && zoom > 1 && onViewChange) {
           panRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -269,6 +274,14 @@ export function Chart({
       }}
       onPointerUp={(event) => {
         panRef.current = null;
+        document.body.classList.remove('chart-panning');
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
+      onPointerCancel={(event) => {
+        panRef.current = null;
+        document.body.classList.remove('chart-panning');
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
@@ -404,7 +417,12 @@ export function Chart({
       <g className="chart-planets">
         {scene.planets.map((planet) => {
           const glowRadius = planet.r * planetGlowScale(planet.magnitude);
-          const spikeLength = glowRadius * 1.35;
+          // 暗行星的光晕很小，星芒按光晕算会短到看不见，给它一个下限
+          const faint = planet.magnitude !== null && planet.magnitude >= 3;
+          const spikeLength = faint
+            ? Math.max(glowRadius * 1.35, 10 * (planet.r / 2.8))
+            : glowRadius * 1.35;
+          const spikeOpacity = faint ? 0.26 : 0.24;
           return (
             <g key={planet.id}>
               {/* 星芒画在光晕下层：中心被光晕盖住，只露出细尖 */}
@@ -419,7 +437,7 @@ export function Chart({
                   stroke={planet.color}
                   strokeWidth={0.55}
                   strokeLinecap="round"
-                  opacity={0.24}
+                  opacity={spikeOpacity}
                 />
                 <line
                   x1={0}
@@ -429,7 +447,7 @@ export function Chart({
                   stroke={planet.color}
                   strokeWidth={0.55}
                   strokeLinecap="round"
-                  opacity={0.24}
+                  opacity={spikeOpacity}
                 />
               </g>
               <circle

@@ -119,6 +119,9 @@ export default function App() {
   const [compareDate, setCompareDate] = useState('');
   const [compareTime, setCompareTime] = useState('20:00');
   const [skyView, setSkyView] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
+  const [liveOn, setLiveOn] = useState(false);
+  const [liveSnapshot, setLiveSnapshot] = useState<SkySnapshot | null>(null);
+  const liveDaylight = useRef<boolean | null>(null);
   const minutesRef = useRef(0);
 
   const qualityOption = SKY_QUALITY.find((option) => option.id === quality) ?? SKY_QUALITY[1];
@@ -172,6 +175,46 @@ export default function App() {
     };
   }, []);
 
+  // 实时：每秒重算一次。天空每秒只转 0.004°，1Hz 在视觉上已经连续
+  useEffect(() => {
+    if (!liveOn || !result) return;
+
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      setLiveSnapshot(computeSnapshot(new Date(), result.snapshot.geo));
+    };
+
+    tick();
+    const timer = window.setInterval(tick, 1000);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [liveOn, result]);
+
+  // 实时跨过日出 / 日落时，界面跟着换主题
+  useEffect(() => {
+    if (!liveOn || !liveSnapshot) return;
+
+    const daylight = liveSnapshot.daylight;
+    if (liveDaylight.current === null) {
+      liveDaylight.current = daylight;
+      return;
+    }
+    if (liveDaylight.current !== daylight) {
+      liveDaylight.current = daylight;
+      setTheme(daylight ? 'paper' : 'night');
+    }
+  }, [liveOn, liveSnapshot]);
+
   const selectedLabel = selectedCity ? (selectedCity.zh ?? selectedCity.name) : '';
   const showMatches =
     cityQuery.trim().length > 0 && cities.length > 0 && cityQuery.trim() !== selectedLabel;
@@ -192,7 +235,8 @@ export default function App() {
     return computeSnapshot(instant, result.snapshot.geo);
   }, [result, nightWindow, nightMinutes]);
 
-  const displaySnapshot = previewSnapshot ?? result?.snapshot ?? null;
+  const displaySnapshot =
+    liveOn && liveSnapshot ? liveSnapshot : (previewSnapshot ?? result?.snapshot ?? null);
 
   const displayOffset = displaySnapshot
     ? formatOffset(
@@ -407,6 +451,8 @@ export default function App() {
       setSelectedId(null);
       setStarted(true);
       setCompareOn(false);
+      setLiveOn(false);
+      setLiveSnapshot(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -430,12 +476,55 @@ export default function App() {
     computeFromForm(nextForm);
   }
 
+  /** 停止实时：把当前时刻写回表单，文案按这一刻重新生成。 */
+  function stopLive(): void {
+    if (!liveOn) return;
+
+    const snapshot = liveSnapshot;
+    if (snapshot) {
+      const instant = new Date(snapshot.utc);
+      const timeZone = form.timeZone.trim();
+      const parts = localDateTimeOf(instant, timeZone);
+      setForm((previous) => ({ ...previous, date: parts.date, time: parts.time }));
+      setResult({
+        snapshot,
+        offset: formatOffset(offsetSecondsAt(instant.getTime(), timeZone)),
+        skipped: false,
+        ambiguous: false,
+      });
+    }
+
+    setLiveOn(false);
+    setLiveSnapshot(null);
+    liveDaylight.current = null;
+  }
+
+  function toggleLive(): void {
+    if (liveOn) {
+      stopLive();
+      return;
+    }
+    if (!result) return;
+
+    setCompareOn(false);
+    setNightMinutes(null);
+    setPlaying(false);
+    setSelectedId(null);
+
+    const snapshot = computeSnapshot(new Date(), result.snapshot.geo);
+    liveDaylight.current = snapshot.daylight;
+    setTheme(snapshot.daylight ? 'paper' : 'night');
+    setLiveSnapshot(snapshot);
+    setLiveOn(true);
+  }
+
   /** 进入对比时，默认取十年前的同一天，同一钟点。 */
   function toggleCompare(): void {
     if (compareOn) {
       setCompareOn(false);
       return;
     }
+    if (liveOn) stopLive();
 
     const [year, month, day] = form.date.split('-').map(Number);
     if (year && month && day) {
@@ -639,6 +728,16 @@ export default function App() {
               {compareOn ? '退出对比' : '双时刻'}
             </button>
 
+            <button
+              type="button"
+              className={`stage-live${liveOn ? ' is-live' : ''}`}
+              aria-pressed={liveOn}
+              onClick={toggleLive}
+            >
+              <span className="stage-live-dot" />
+              {liveOn ? '停止实时' : '实时'}
+            </button>
+
             <div className="stage-options">
               <div className="option-group">
                 <span className="option-label">画面</span>
@@ -764,7 +863,7 @@ export default function App() {
             <section className="stage-grid">
           <div className="stage-sky">
             {scene && (
-              <>
+              <div className="chart-wrap">
                 <figure className="chart-figure">
                   <Chart
                     scene={scene}
@@ -796,8 +895,35 @@ export default function App() {
                     </button>
                   )}
                 </div>
-              </>
+              </div>
             )}
+
+            <div className="stage-left">
+              <div className="stage-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>天体</th>
+                      <th className="num">高度</th>
+                      <th className="num">星等</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bodies.map((body) => (
+                      <tr key={body.id} className={body.aboveHorizon ? '' : 'below'}>
+                        <td>{body.name}</td>
+                        <td className="num">{formatAltitude(body.altitude)}</td>
+                        <td className="num">{formatMagnitude(body.magnitude)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {details && (
+                <ObjectPanel details={details} onClose={() => setSelectedId(null)} floating />
+              )}
+            </div>
           </div>
 
           <aside className="stage-rail">
@@ -810,7 +936,14 @@ export default function App() {
               {displaySnapshot.geo.longitude.toFixed(2)}°E
             </p>
 
-            {epitaph && (
+            {liveOn && (
+              <p className="stage-live-status">
+                <span className="stage-live-dot" />
+                实时 · 每秒刷新 · 停止后按此刻生成文案
+              </p>
+            )}
+
+            {epitaph && !liveOn && (
               <section className="epitaph">
                 <div className="epitaph-head">
                   <span className="option-label">文案</span>
@@ -844,9 +977,7 @@ export default function App() {
               </section>
             )}
 
-            {details && <ObjectPanel details={details} onClose={() => setSelectedId(null)} />}
-
-            {nightWindow && (
+            {!liveOn && nightWindow && (
               <section className="night">
                 <div className="night-head">
                   <span className="option-label">这一夜</span>
@@ -984,25 +1115,6 @@ export default function App() {
                 这个本地时间在 {form.timeZone} 出现两次（夏令时回拨），此处取较早的一次。
               </p>
             )}
-
-            <table>
-              <thead>
-                <tr>
-                  <th>天体</th>
-                  <th className="num">高度</th>
-                  <th className="num">星等</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bodies.map((body) => (
-                  <tr key={body.id} className={body.aboveHorizon ? '' : 'below'}>
-                    <td>{body.name}</td>
-                    <td className="num">{formatAltitude(body.altitude)}</td>
-                    <td className="num">{formatMagnitude(body.magnitude)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </aside>
 
           {chartOpen && scene && (
