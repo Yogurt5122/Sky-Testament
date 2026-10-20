@@ -118,6 +118,7 @@ export default function App() {
   const [compareOn, setCompareOn] = useState(false);
   const [compareDate, setCompareDate] = useState('');
   const [compareTime, setCompareTime] = useState('20:00');
+  const [skyView, setSkyView] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
   const minutesRef = useRef(0);
 
   const qualityOption = SKY_QUALITY.find((option) => option.id === quality) ?? SKY_QUALITY[1];
@@ -761,17 +762,35 @@ export default function App() {
             {scene && (
               <>
                 <figure className="chart-figure">
-                  <Chart scene={scene} onPick={setSelectedId} selectedId={selectedId} />
+                  <Chart
+                    scene={scene}
+                    onPick={setSelectedId}
+                    selectedId={selectedId}
+                    zoom={skyView.zoom}
+                    pan={skyView.pan}
+                    onViewChange={setSkyView}
+                    interactive
+                  />
                   <figcaption>
                     {scene.daylight ? '白昼的天空 · ' : ''}
                     可见恒星 {scene.starCount} 颗 · 极限 {scene.limitingMagnitude} 等 · 球极投影
-                    {scene.objects.length > 0 ? ' · 点击天体查看详情' : ''}
+                    {scene.objects.length > 0 ? ' · 点击天体' : ''}
+                    {' · 滚轮缩放 · 拖动平移'}
                   </figcaption>
                 </figure>
                 <div className="chart-actions">
                   <button type="button" className="chart-trigger" onClick={() => setChartOpen(true)}>
                     全屏星空
                   </button>
+                  {skyView.zoom > 1 && (
+                    <button
+                      type="button"
+                      className="stage-reset"
+                      onClick={() => setSkyView({ zoom: 1, pan: { x: 0, y: 0 } })}
+                    >
+                      {skyView.zoom.toFixed(1)}× · 复位
+                    </button>
+                  )}
                 </div>
               </>
             )}

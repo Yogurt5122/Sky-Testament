@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { ChartScene, MoonDisc } from './scene';
 
 export interface ChartViewBox {
@@ -13,6 +13,7 @@ export interface ChartViewBox {
  * 把一次屏幕点击换算成场景坐标，找出最近的天体。
  *
  * 判定半径按屏幕像素折算：放大后不会"一点选中一片"。
+ * zoom / pan 对应画布内内容的缩放平移（外圈固定时使用）。
  */
 export function pickObjectAt(
   scene: ChartScene,
@@ -21,15 +22,22 @@ export function pickObjectAt(
   clientX: number,
   clientY: number,
   radiusPx = 14,
+  zoom = 1,
+  pan: { x: number; y: number } = { x: 0, y: 0 },
 ): string | null {
   const scale = Math.max(rect.width / viewBox.width, rect.height / viewBox.height);
   const offsetX = (rect.width - viewBox.width * scale) / 2;
   const offsetY = (rect.height - viewBox.height * scale) / 2;
-  const x = viewBox.x + (clientX - rect.left - offsetX) / scale;
-  const y = viewBox.y + (clientY - rect.top - offsetY) / scale;
+  let x = viewBox.x + (clientX - rect.left - offsetX) / scale;
+  let y = viewBox.y + (clientY - rect.top - offsetY) / scale;
+
+  if (zoom !== 1 || pan.x !== 0 || pan.y !== 0) {
+    x = scene.center + (x - scene.center - pan.x) / zoom;
+    y = scene.center + (y - scene.center - pan.y) / zoom;
+  }
 
   let bestId: string | null = null;
-  let bestDistance = radiusPx / scale;
+  let bestDistance = radiusPx / (scale * zoom);
   for (const object of scene.objects) {
     const distance = Math.hypot(object.x - x, object.y - y);
     if (distance < bestDistance) {
@@ -50,6 +58,14 @@ interface ChartProps {
   onPick?: (id: string) => void;
   /** 当前选中的对象 id，用于高亮 */
   selectedId?: string | null;
+  /** 内容层缩放 */
+  zoom?: number;
+  /** 内容层平移（场景单位） */
+  pan?: { x: number; y: number };
+  /** 缩放 / 平移变化回调 */
+  onViewChange?: (view: { zoom: number; pan: { x: number; y: number } }) => void;
+  /** 允许滚轮缩放与拖拽平移 */
+  interactive?: boolean;
 }
 
 const CARDINALS = [
@@ -91,6 +107,10 @@ export function Chart({
   viewBox,
   onPick,
   selectedId = null,
+  zoom = 1,
+  pan = { x: 0, y: 0 },
+  onViewChange,
+  interactive = false,
 }: ChartProps) {
   const { size, center, radius, daylight } = scene;
   const minimal = scene.detail === 'minimal';
@@ -111,12 +131,56 @@ export function Chart({
     ? `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`
     : `0 0 ${size} ${size}`;
 
+  // 内容层：以天顶为中心缩放，再平移；外圈与刻度保持不动
+  const contentTransform = `translate(${center + pan.x} ${center + pan.y}) scale(${zoom}) translate(${-center} ${-center})`;
+  const contentLabelScale = labelScale / zoom;
+  const clipId = `chart-clip-${useId().replace(/:/g, '')}`;
+
   const selectedObject = selectedId
     ? (scene.objects.find((object) => object.id === selectedId) ?? null)
     : null;
 
+  const svgRef = useRef<SVGSVGElement>(null);
   const pressRef = useRef<{ x: number; y: number } | null>(null);
   const draggedRef = useRef(false);
+  const panRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+
+  const clampPan = (x: number, y: number, level: number) => {
+    const limit = radius * (level - 1);
+    return {
+      x: Math.min(limit, Math.max(-limit, x)),
+      y: Math.min(limit, Math.max(-limit, y)),
+    };
+  };
+
+  useEffect(() => {
+    if (!interactive || !onViewChange) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      const scale = Math.max(rect.width, rect.height) / size;
+      const pointerX = center + (event.clientX - rect.left - rect.width / 2) / scale;
+      const pointerY = center + (event.clientY - rect.top - rect.height / 2) / scale;
+      const nextZoom = Math.min(5, Math.max(1, zoom * Math.exp(-event.deltaY * 0.0015)));
+      if (Math.abs(nextZoom - zoom) < 0.001) return;
+
+      // 让光标下的那一点在缩放前后停在同一位置
+      const sceneX = center + (pointerX - center - pan.x) / zoom;
+      const sceneY = center + (pointerY - center - pan.y) / zoom;
+      const nextPan = clampPan(
+        pointerX - center - (sceneX - center) * nextZoom,
+        pointerY - center - (sceneY - center) * nextZoom,
+        nextZoom,
+      );
+      onViewChange({ zoom: nextZoom, pan: nextPan });
+    };
+
+    svg.addEventListener('wheel', onWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', onWheel);
+  }, [interactive, onViewChange, zoom, pan, size, center, radius]);
 
   const handleClick = (event: React.MouseEvent<SVGSVGElement>) => {
     if (!onPick) return;
@@ -127,7 +191,7 @@ export function Chart({
 
     const rect = event.currentTarget.getBoundingClientRect();
     const vb = viewBox ?? { x: 0, y: 0, width: size, height: size };
-    const id = pickObjectAt(scene, vb, rect, event.clientX, event.clientY);
+    const id = pickObjectAt(scene, vb, rect, event.clientX, event.clientY, 14, zoom, pan);
     if (id) onPick(id);
   };
 
@@ -149,7 +213,8 @@ export function Chart({
 
   return (
     <svg
-      className={`chart${daylight ? ' chart--day' : ''}`}
+      ref={svgRef}
+      className={`chart${daylight ? ' chart--day' : ''}${interactive ? ' chart--interactive' : ''}`}
       viewBox={viewBoxAttr}
       preserveAspectRatio="xMidYMid slice"
       role="img"
@@ -158,50 +223,53 @@ export function Chart({
       onPointerDown={(event) => {
         pressRef.current = { x: event.clientX, y: event.clientY };
         draggedRef.current = false;
+        if (interactive && zoom > 1 && onViewChange) {
+          panRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
       }}
       onPointerMove={(event) => {
         const start = pressRef.current;
-        if (!start) return;
-        if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) {
+        if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) {
           draggedRef.current = true;
         }
+
+        const drag = panRef.current;
+        if (drag && interactive && onViewChange && zoom > 1) {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const scale = Math.max(rect.width, rect.height) / size;
+          onViewChange({
+            zoom,
+            pan: clampPan(
+              drag.panX + (event.clientX - drag.x) / scale,
+              drag.panY + (event.clientY - drag.y) / scale,
+              zoom,
+            ),
+          });
+        }
       }}
-      style={onPick ? { cursor: 'crosshair' } : undefined}
+      onPointerUp={(event) => {
+        panRef.current = null;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
+      onDoubleClick={
+        interactive && onViewChange
+          ? () => onViewChange({ zoom: 1, pan: { x: 0, y: 0 } })
+          : undefined
+      }
+      style={{
+        cursor: interactive ? (zoom > 1 ? 'grab' : 'zoom-in') : onPick ? 'crosshair' : undefined,
+      }}
     >
+      <defs>
+        <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
+          <circle cx={center} cy={center} r={radius} />
+        </clipPath>
+      </defs>
+
       <circle className="chart-disc" cx={center} cy={center} r={radius} />
-
-      {!minimal &&
-        [30, 60].map((altitude) => (
-          <circle
-            key={altitude}
-            className="chart-ring"
-            cx={center}
-            cy={center}
-            r={ringRadius(altitude, radius)}
-          />
-        ))}
-
-      {atlas &&
-        [30, 60].map((altitude) => (
-          <text
-            key={`ring-${altitude}`}
-            className="chart-ring-label"
-            x={center}
-            y={center - ringRadius(altitude, radius) - 6}
-            textAnchor="middle"
-            fontSize={11 * labelScale}
-            style={{ strokeWidth: 3 * labelScale }}
-          >
-            {altitude}°
-          </text>
-        ))}
-
-      {!minimal && (
-        <>
-          <line className="chart-axis" x1={center} y1={center - radius} x2={center} y2={center + radius} />
-          <line className="chart-axis" x1={center - radius} y1={center} x2={center + radius} y2={center} />
-        </>
-      )}
 
       {!minimal &&
         tickMarks.map((tick) => (
@@ -234,20 +302,56 @@ export function Chart({
           );
         })}
 
+      {/* 内容层：缩放平移，但被地平圈裁掉，外圈始终不动 */}
+      <g clipPath={`url(#${clipId})`}>
+        <g transform={contentTransform}>
+        {!minimal &&
+          [30, 60].map((altitude) => (
+            <circle
+              key={altitude}
+              className="chart-ring"
+              cx={center}
+              cy={center}
+              r={ringRadius(altitude, radius)}
+            />
+          ))}
+
+        {atlas &&
+          [30, 60].map((altitude) => (
+            <text
+              key={`ring-${altitude}`}
+              className="chart-ring-label"
+              x={center}
+              y={center - ringRadius(altitude, radius) - 6}
+              textAnchor="middle"
+              fontSize={11 * contentLabelScale}
+              style={{ strokeWidth: 3 * contentLabelScale }}
+            >
+              {altitude}°
+            </text>
+          ))}
+
+        {!minimal && (
+          <>
+            <line className="chart-axis" x1={center} y1={center - radius} x2={center} y2={center + radius} />
+            <line className="chart-axis" x1={center - radius} y1={center} x2={center + radius} y2={center} />
+          </>
+        )}
+
       {(scene.equator || scene.ecliptic) && (
         <g className="chart-guides">
           {scene.equator && (
             <path
               className="chart-guide chart-guide--equator"
               d={scene.equator}
-              style={{ strokeWidth: 0.7 * labelScale }}
+              style={{ strokeWidth: 0.7 * contentLabelScale }}
             />
           )}
           {scene.ecliptic && (
             <path
               className="chart-guide chart-guide--ecliptic"
               d={scene.ecliptic}
-              style={{ strokeWidth: 0.8 * labelScale }}
+              style={{ strokeWidth: 0.8 * contentLabelScale }}
             />
           )}
         </g>
@@ -267,7 +371,7 @@ export function Chart({
 
       <g className="chart-constellations">
         {scene.constellations.map((figure) => (
-          <path key={figure.abbr} d={figure.d} style={{ strokeWidth: 0.85 * labelScale }} />
+          <path key={figure.abbr} d={figure.d} style={{ strokeWidth: 0.85 * contentLabelScale }} />
         ))}
       </g>
 
@@ -303,8 +407,8 @@ export function Chart({
             x={label.x}
             y={label.y}
             textAnchor={label.anchor}
-            fontSize={label.size * labelScale}
-            style={{ strokeWidth: 3.5 * labelScale }}
+            fontSize={label.size * contentLabelScale}
+            style={{ strokeWidth: 3.5 * contentLabelScale }}
             dominantBaseline="middle"
           >
             {label.text}
@@ -316,10 +420,10 @@ export function Chart({
         <text
           className="chart-ring-label"
           x={center}
-          y={center + 15 * labelScale}
+          y={center + 15 * contentLabelScale}
           textAnchor="middle"
-          fontSize={10 * labelScale}
-          style={{ strokeWidth: 3 * labelScale }}
+          fontSize={10 * contentLabelScale}
+          style={{ strokeWidth: 3 * contentLabelScale }}
         >
           天顶
         </text>
@@ -335,6 +439,8 @@ export function Chart({
       )}
 
       <circle className="chart-zenith" cx={center} cy={center} r={1.6} />
+        </g>
+      </g>
     </svg>
   );
 }
