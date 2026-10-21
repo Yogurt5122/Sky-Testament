@@ -619,6 +619,87 @@ export default function App() {
     ? [...displaySnapshot.bodies].sort((a, b) => b.altitude - a.altitude)
     : [];
 
+  /** 「这一夜」面板：桌面放在右栏，移动端放在星图下面 */
+  const nightPanel = (modifier: string) =>
+    !liveOn && nightWindow ? (
+      <section className={`night ${modifier}`}>
+        <div className="night-head">
+          <span className="option-label">这一夜</span>
+          <span className="night-window">
+            {sunsetLocal?.date.slice(5)} {sunsetLocal?.label}
+            {' — '}
+            {sunriseLocal?.date.slice(5)} {sunriseLocal?.label}
+          </span>
+          <span className="night-now">{currentLocal?.label}</span>
+          <div className="segmented night-speed">
+            {[1, 800, 1600, 3200, 6400].map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={speed === value ? 'is-active' : ''}
+                onClick={() => setSpeed(value)}
+                aria-label={`${value} 倍速`}
+              >
+                {value}×
+              </button>
+            ))}
+          </div>
+          <button type="button" className="night-play" onClick={togglePlay}>
+            {playing ? '暂停' : '播放'}
+          </button>
+        </div>
+
+        <div className="night-slider">
+          <button
+            type="button"
+            className="night-day"
+            onClick={() => shiftDate(-1)}
+            aria-label="前一日"
+            title="前一日"
+          >
+            ‹
+          </button>
+
+          <input
+            className="night-range"
+            type="range"
+            min={0}
+            max={Math.round(totalMinutes)}
+            step={1}
+            value={Math.round(currentMinutes)}
+            aria-label="这一夜的时间轴"
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              minutesRef.current = value;
+              setNightMinutes(value);
+            }}
+            onPointerUp={() => commitNight(minutesRef.current)}
+            onKeyUp={() => commitNight(minutesRef.current)}
+          />
+
+          <button
+            type="button"
+            className="night-day"
+            onClick={() => shiftDate(1)}
+            aria-label="后一日"
+            title="后一日"
+          >
+            ›
+          </button>
+        </div>
+
+        <div className="night-scale">
+          <span>日落</span>
+          <span>午夜</span>
+          <span>日出</span>
+        </div>
+
+        {nightMinutes !== null && (
+          <p className="night-hint">预览中 · 松开后应用，并重新生成文案</p>
+        )}
+      </section>
+    ) : null;
+
   return (
     <main className={started ? (compareOn ? 'stage stage--compare' : 'stage') : 'page'}>
       {!started && (
@@ -927,6 +1008,8 @@ export default function App() {
               </div>
             )}
 
+            {nightPanel('night--mobile')}
+
             <div className="stage-left">
               <div className="stage-table">
                 <table>
@@ -1006,84 +1089,7 @@ export default function App() {
               </section>
             )}
 
-            {!liveOn && nightWindow && (
-              <section className="night">
-                <div className="night-head">
-                  <span className="option-label">这一夜</span>
-                  <span className="night-window">
-                    {sunsetLocal?.date.slice(5)} {sunsetLocal?.label}
-                    {' — '}
-                    {sunriseLocal?.date.slice(5)} {sunriseLocal?.label}
-                  </span>
-                  <span className="night-now">{currentLocal?.label}</span>
-                  <div className="segmented night-speed">
-                    {[1, 800, 1600, 3200, 6400].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        className={speed === value ? 'is-active' : ''}
-                        onClick={() => setSpeed(value)}
-                        aria-label={`${value} 倍速`}
-                      >
-                        {value}×
-                      </button>
-                    ))}
-                  </div>
-                  <button type="button" className="night-play" onClick={togglePlay}>
-                    {playing ? '暂停' : '播放'}
-                  </button>
-                </div>
-
-                <div className="night-slider">
-                  <button
-                    type="button"
-                    className="night-day"
-                    onClick={() => shiftDate(-1)}
-                    aria-label="前一日"
-                    title="前一日"
-                  >
-                    ‹
-                  </button>
-
-                  <input
-                    className="night-range"
-                    type="range"
-                    min={0}
-                    max={Math.round(totalMinutes)}
-                    step={1}
-                    value={Math.round(currentMinutes)}
-                    aria-label="这一夜的时间轴"
-                    onChange={(event) => {
-                      const value = Number(event.target.value);
-                      minutesRef.current = value;
-                      setNightMinutes(value);
-                    }}
-                    onPointerUp={() => commitNight(minutesRef.current)}
-                    onKeyUp={() => commitNight(minutesRef.current)}
-                  />
-
-                  <button
-                    type="button"
-                    className="night-day"
-                    onClick={() => shiftDate(1)}
-                    aria-label="后一日"
-                    title="后一日"
-                  >
-                    ›
-                  </button>
-                </div>
-
-                <div className="night-scale">
-                  <span>日落</span>
-                  <span>午夜</span>
-                  <span>日出</span>
-                </div>
-
-                {nightMinutes !== null && (
-                  <p className="night-hint">预览中 · 松开后应用，并重新生成文案</p>
-                )}
-              </section>
-            )}
+            {nightPanel('night--rail')}
 
             {events.length > 0 && (
               <section className="events">

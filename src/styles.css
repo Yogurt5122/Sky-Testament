@@ -1970,3 +1970,43 @@ body.theme-night .chart-moon-lit {
   font-size: 12px;
   color: var(--ink-soft);
 }
+
+/* ── 移动端重排：星图 → 这一夜 → 标题文案 → 天体表 → 天象 → 元信息 ── */
+
+/* 移动端重排：星图 → 这一夜 → 标题文案 → 天体表 → 天象 → 元信息 */
+
+/* 移动端重排：星图 → 播放条 → 这一夜 → 标题文案 → 天体表 → 天象 → 元信息 */
+
+/* 「这一夜」：桌面在右栏，移动端挪到星图下面 */
+.night--mobile {
+  display: none;
+}
+
+@media (max-width: 1020px) {
+  .stage-rail > .night--rail {
+    display: none;
+  }
+
+  .stage-sky > .night--mobile {
+    display: block;
+    margin: 32px 0 8px;
+    padding: 16px 16px 12px;
+  }
+
+  .night--mobile .night-head {
+    gap: 10px;
+  }
+
+  .night--mobile .night-speed button {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .night--mobile .night-slider {
+    gap: 8px;
+  }
+
+  .night--mobile .night-range {
+    min-width: 0;
+  }
+}
