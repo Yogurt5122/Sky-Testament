@@ -338,6 +338,53 @@ label {
   color: var(--ink-soft);
 }
 
+.date-field {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.date-field input[type='text'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.date-field.is-invalid input[type='text'] {
+  border-color: #c96a5a;
+  outline-color: #c96a5a;
+}
+
+.date-field__picker {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.date-field__picker:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
+.date-field__native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 input {
   font-family: var(--mono);
   font-size: 14px;

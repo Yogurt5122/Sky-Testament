@@ -13,6 +13,7 @@ import { findNightEvents } from './core/events';
 import { bodyDetails, starDetails } from './core/details';
 import { ObjectPanel } from './render/ObjectPanel';
 import ShareCard from './render/ShareCard';
+import { DateField } from './render/DateField';
 import { inlineComputedStyles } from './render/flatten';
 import { starSubtitle, starTitle, type StarDesignation } from './core/star-names';
 import { buildShareQuery, parseShareQuery } from './core/share-link';
@@ -862,7 +863,7 @@ export default function App() {
         <div className="fields">
           <label>
             <span>日期</span>
-            <input type="date" value={form.date} onChange={(e) => update('date', e.target.value)} required />
+            <DateField value={form.date} onChange={(value) => update('date', value)} />
           </label>
           <label>
             <span>时间</span>
