@@ -499,6 +499,12 @@ export default function App() {
       setCompareOn(false);
       setLiveOn(false);
       setLiveSnapshot(null);
+
+      // 移动端表单较高，点完「计算」时页面往往还停在按钮处；
+      // 第一次进入星图时回到顶部，否则画好的星图会被滚到视口上方
+      if (!started) {
+        window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'auto' }));
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
