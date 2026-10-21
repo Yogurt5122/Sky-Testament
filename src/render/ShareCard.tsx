@@ -11,6 +11,8 @@ export interface ShareCardProps {
   seed: string;
   scene: ChartScene;
   starCount: number;
+  /** 二维码 PNG（data URL），指向当前分享链接 */
+  qrDataUrl?: string | null;
 }
 
 /**
@@ -27,6 +29,7 @@ export default function ShareCard({
   seed,
   scene,
   starCount,
+  qrDataUrl,
 }: ShareCardProps) {
   return (
     <article className="share-card">
@@ -48,6 +51,13 @@ export default function ShareCard({
       </div>
 
       <p className="share-card__text">{text}</p>
+
+      {qrDataUrl && (
+        <div className="share-card__qr">
+          <img src={qrDataUrl} alt="扫码回到这一刻" />
+          <span>扫码回到这一刻</span>
+        </div>
+      )}
 
       <footer className="share-card__foot">
         <span>seed {seed}</span>

@@ -15,6 +15,7 @@ import { ObjectPanel } from './render/ObjectPanel';
 import ShareCard from './render/ShareCard';
 import { inlineComputedStyles } from './render/flatten';
 import { starSubtitle, starTitle, type StarDesignation } from './core/star-names';
+import { buildShareQuery, parseShareQuery } from './core/share-link';
 import starNamesZh from './data/star-names-zh.json';
 
 const NAME_ZH = starNamesZh as Record<string, string>;
@@ -95,7 +96,23 @@ function formatMagnitude(value: number | null): string {
 }
 
 export default function App() {
-  const [form, setForm] = useState<FormState>(DEFAULTS);
+  // 分享链接：打开时如果有参数，就按参数还原表单与显示档位
+  const [sharedLink] = useState(() =>
+    typeof window === 'undefined' ? null : parseShareQuery(window.location.search),
+  );
+
+  const [form, setForm] = useState<FormState>(() =>
+    sharedLink
+      ? {
+          date: sharedLink.date,
+          time: sharedLink.time,
+          timeZone: sharedLink.timeZone,
+          latitude: sharedLink.latitude,
+          longitude: sharedLink.longitude,
+          elevation: sharedLink.elevation,
+        }
+      : DEFAULTS,
+  );
   const [cities, setCities] = useState<City[]>([]);
   const [stars, setStars] = useState<Star[]>([]);
   const [starNames, setStarNames] = useState<Map<number, string>>(new Map());
@@ -109,13 +126,15 @@ export default function App() {
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const shareCardRef = useRef<HTMLDivElement | null>(null);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
-  const [theme, setTheme] = useState<Theme>('night');
-  const [quality, setQuality] = useState<QualityId>('suburb');
-  const [detail, setDetail] = useState<DetailLevel>('standard');
-  const [textStyle, setTextStyle] = useState<TextStyle>('classical');
-  const [variant, setVariant] = useState(0);
+  const [theme, setTheme] = useState<Theme>(sharedLink?.theme ?? 'night');
+  const [quality, setQuality] = useState<QualityId>(sharedLink?.quality ?? 'suburb');
+  const [detail, setDetail] = useState<DetailLevel>(sharedLink?.detail ?? 'standard');
+  const [textStyle, setTextStyle] = useState<TextStyle>(sharedLink?.style ?? 'classical');
+  const [variant, setVariant] = useState(sharedLink?.variant ?? 0);
   const [nightMinutes, setNightMinutes] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1600);
@@ -173,6 +192,22 @@ export default function App() {
         setStars(parseStarCatalog(buffer));
         setStarNames(buildNameMap(names));
         setStarDesignations(buildDesignationMap(names));
+
+        // 分享链接：星表就绪后自动算出这一张图
+        if (sharedLink) {
+          computeFromForm(
+            {
+              date: sharedLink.date,
+              time: sharedLink.time,
+              timeZone: sharedLink.timeZone,
+              latitude: sharedLink.latitude,
+              longitude: sharedLink.longitude,
+              elevation: sharedLink.elevation,
+            },
+            sharedLink.theme,
+            sharedLink.variant,
+          );
+        }
       })
       .catch(() => {
         if (!cancelled) setStars([]);
@@ -416,7 +451,11 @@ export default function App() {
     setCityQuery(city.zh ?? city.name);
   }
 
-  function computeFromForm(nextForm: FormState): void {
+  function computeFromForm(
+    nextForm: FormState,
+    themeOverride?: Theme,
+    variantOverride?: number,
+  ): void {
     setError(null);
 
     try {
@@ -450,9 +489,9 @@ export default function App() {
         ambiguous: local.ambiguous,
       });
 
-      // 白昼用纸面、夜间用夜空，避免浅色圆盘压在深色页面上
-      setTheme(snapshot.daylight ? 'paper' : 'night');
-      setVariant(0);
+      // 白昼用纸面、夜间用夜空；分享链接可以强制指定主题
+      setTheme(themeOverride ?? (snapshot.daylight ? 'paper' : 'night'));
+      setVariant(variantOverride ?? 0);
       setNightMinutes(null);
       setPlaying(false);
       setSelectedId(null);
@@ -517,6 +556,67 @@ export default function App() {
       setShareBusy(false);
     }
   }
+
+  // 有结果后把当前状态写进 URL，复制地址即可复现同一张图
+  useEffect(() => {
+    if (!result) return;
+    const query = buildShareQuery({
+      date: form.date,
+      time: form.time,
+      timeZone: form.timeZone,
+      latitude: form.latitude,
+      longitude: form.longitude,
+      elevation: form.elevation,
+      place: selectedCity ? (selectedCity.zh ?? selectedCity.name) : (sharedLink?.place ?? ''),
+      style: textStyle,
+      variant,
+      theme,
+      quality,
+      detail,
+    });
+    const nextUrl = `${window.location.pathname}?${query}${window.location.hash}`;
+    window.history.replaceState(null, '', nextUrl);
+  }, [result, form, selectedCity, textStyle, variant, theme, quality, detail]);
+
+  // 打开分享面板时生成二维码：指向当前 URL，扫码即可回到这一刻
+  useEffect(() => {
+    if (!shareOpen) return;
+    let cancelled = false;
+    setQrDataUrl(null);
+
+    import('qrcode')
+      .then((QRCode) =>
+        QRCode.toDataURL(window.location.href, {
+          margin: 1,
+          width: 360,
+          color: { dark: '#1a1a18', light: '#f4f0e8' },
+        }),
+      )
+      .then((url) => {
+        if (!cancelled) setQrDataUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shareOpen]);
+
+  async function copyShareLink(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1800);
+    } catch {
+      setShareError('复制失败，请手动复制地址栏');
+    }
+  }
+
+  const placeLabel = selectedCity
+    ? (selectedCity.zh ?? selectedCity.name)
+    : sharedLink?.place || '此刻';
 
   function toggleLive(): void {
     if (liveOn) {
@@ -816,7 +916,7 @@ export default function App() {
               ← 返回修改
             </button>
             <span className="stage-place">
-              {selectedCity ? (selectedCity.zh ?? selectedCity.name) : '此刻'}
+              {placeLabel}
               {currentLocal ? ` · ${currentLocal.date.replace(/-/g, '.')}` : ''}
               {currentLocal ? ` ${currentLocal.label}` : ''}
             </span>
@@ -1040,9 +1140,7 @@ export default function App() {
 
           <aside className="stage-rail">
             <p className="stage-date">{currentLocal?.date.replace(/-/g, '.')}</p>
-            <h1 className="stage-title">
-              {selectedCity ? (selectedCity.zh ?? selectedCity.name) : '此刻'}
-            </h1>
+            <h1 className="stage-title">{placeLabel}</h1>
             <p className="stage-coord">
               {currentLocal?.label} · {displaySnapshot.geo.latitude.toFixed(2)}°N{' '}
               {displaySnapshot.geo.longitude.toFixed(2)}°E
@@ -1176,7 +1274,7 @@ export default function App() {
                   <div className="share-modal__scale">
                     <div ref={shareCardRef}>
                       <ShareCard
-                        city={selectedCity ? (selectedCity.zh ?? selectedCity.name) : '此刻'}
+                        city={placeLabel}
                         date={currentLocal?.date ?? form.date}
                         time={currentLocal?.label ?? form.time}
                         latitude={displaySnapshot.geo.latitude}
@@ -1185,6 +1283,7 @@ export default function App() {
                         seed={epitaph.seed}
                         scene={scene}
                         starCount={scene.starCount}
+                        qrDataUrl={qrDataUrl}
                       />
                     </div>
                   </div>
@@ -1195,6 +1294,9 @@ export default function App() {
                 <div className="share-modal__actions">
                   <button type="button" onClick={downloadShareCard} disabled={shareBusy}>
                     {shareBusy ? '正在生成…' : '下载 PNG'}
+                  </button>
+                  <button type="button" onClick={copyShareLink}>
+                    {shareCopied ? '已复制' : '复制链接'}
                   </button>
                   <button type="button" onClick={() => setShareOpen(false)}>
                     关闭
